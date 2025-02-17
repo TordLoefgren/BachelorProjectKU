@@ -30,6 +30,9 @@ def to_base64(data: Any) -> str:
 
     If the data is a string, we first 'utf-8' encode the the data.
     """
+
+    # TODO: Add serialiser for other data types.
+
     if isinstance(data, str):
         data = data.encode(UTF_8_ENCODING_STRING)
     encoded_data = base64.b64encode(data)
@@ -43,6 +46,9 @@ def from_base64(data: str, is_string: bool = False) -> Any:
 
     If the decoded data is expected to be a string, we first 'utf-8' decode the the data.
     """
+
+    # TODO: Add serialiser for other data types.
+
     decoded_data = base64.b64decode(data)
 
     if is_string:
