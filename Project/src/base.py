@@ -1,16 +1,107 @@
 """
-A file containing functions and classes that are used by other parts of the package.
+A module containing core classes and functions that are used by other modules in the package.
 """
 
 import base64
+import pickle
+import struct
 from dataclasses import dataclass
-from enum import Enum, unique
 from pathlib import Path
 from random import choice
 from string import ascii_uppercase
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Optional, Protocol
+
+import numpy as np
 
 UTF_8_ENCODING_STRING = "utf-8"
+
+
+class PreparationFunction(Protocol):
+    """
+    Prepare raw test data.
+    """
+
+    def __call__(self, data: Any) -> bytes:
+        pass
+
+
+class EncodingFunction(Protocol):
+    """
+    Convert test data into video format, using a specified encoding.
+    """
+
+    def __call__(
+        self,
+        prepared_data: bytes,
+        video_file_path: str,
+        configuration: Optional["VideoEncodingConfiguration"] = None,
+    ) -> None:
+        pass
+
+
+class ProcessingFunction(Protocol):
+    """
+    Process the data in some way that emulates what a video service might do.
+    """
+
+    def __call__(self, prepared_data: bytes) -> bytes:
+        pass
+
+
+class DecodingFunction(Protocol):
+    """
+    Convert the video back into the original data format.
+    """
+
+    def __call__(
+        self,
+        video_file_path: str,
+        configuration: Optional["VideoEncodingConfiguration"] = None,
+    ) -> bytes:
+        pass
+
+
+@dataclass
+class VideoEncodingConfiguration:
+    pass
+
+
+@dataclass
+class VideoEncodingPipeline:
+    """A dataclass representing a video encoding pipeline."""
+
+    preparation_function: PreparationFunction
+    encoding_function: EncodingFunction
+    decoding_function: DecodingFunction
+    processing_function: Optional[ProcessingFunction] = None
+    configuration: Optional[VideoEncodingConfiguration] = None
+
+    def run_encode(self, data: Any, video_file_path: str) -> None:
+        """
+        Runs the encoding part of the pipeline.
+        """
+
+        prepared_data = self.preparation_function(data)
+
+        if self.processing_function is not None:
+            prepared_data = self.processing_function(prepared_data)
+
+        self.encoding_function(prepared_data, video_file_path, self.configuration)
+
+    def run_decode(self, video_file_path: str) -> bytes:
+        """
+        Runs the decoding part of the pipeline.
+        """
+
+        return self.decoding_function(video_file_path, self.configuration)
+
+    def run_pipeline(self, data: Any, video_file_path: str) -> bytes:
+        """
+        Runs the full pipeline, making a roundtrip.
+        """
+
+        self.run_encode(data, video_file_path)
+        return self.run_decode(video_file_path)
 
 
 def read_file_as_binary(file_path: Path) -> bytes:
@@ -22,6 +113,50 @@ def read_file_as_binary(file_path: Path) -> bytes:
 
     with open(file_path, mode="rb") as f:
         return f.read()
+
+
+def to_bytes(data: Any) -> bytes:
+    """
+    Returns the byte representation of the given data.
+
+    Inspiration from:
+    https://stackoverflow.com/questions/62565944/how-to-convert-any-object-to-a-byte-array-and-keep-it-on-memory
+    """
+
+    match data:
+        case bytes():
+            return data
+        case str():
+            return data.encode(UTF_8_ENCODING_STRING)
+        case int() | float():
+            return struct.pack("d", data)
+        case np.ndarray():
+            return data.tobytes()
+        case _:
+            # Collections and objects.
+            try:
+                return pickle.dumps(data)
+            except Exception as e:
+                raise TypeError(f"Unsupported data type: {type(data)}") from e
+
+
+def from_bytes(data: bytes) -> Any:
+    """
+    Returns the data represented by the bytes.
+    """
+
+    if not isinstance(data, bytes):
+        raise TypeError(f"Unsupported data type: {type(data)}")
+
+    return data.decode(UTF_8_ENCODING_STRING)
+
+
+def generate_random_string(n: int) -> str:
+    """
+    Generates a string of n random ascii uppercase characters.
+    """
+
+    return "".join(choice(ascii_uppercase) for _ in range(n))
 
 
 def to_base64(data: Any) -> str:
@@ -57,69 +192,6 @@ def from_base64(data: str, is_string: bool = False) -> Any:
     return decoded_data
 
 
-def generate_random_string(n: int) -> str:
-    """
-    Generates a string of n random ascii uppercase characters.
-    """
-
-    return "".join(choice(ascii_uppercase) for _ in range(n))
-
-
 # region ------------ WIP and ideas section ------------
-
-
-FILE_PATH: Path = Path(__file__).resolve()
-TEST_DATA_DIRECTORY: Path = FILE_PATH.parent.parent / "tests" / "test_data"
-
-AUDIO_TEST_FILE = "test_audio.mp3"
-TEXT_TEST_FILE = "test_text.txt"
-VIDEO_TEST_FILE = "test_video.mp4"
-
-
-# Prepare the test data (text, video, or sound).
-PreparationFunction = Callable[..., Any]
-
-# Convert test data into video format, using a specified encoding.
-EncodingFunction = Callable[..., Any]
-
-# Process the data in some way that emulates what a video service might do (Optional).
-ProcessingFunction = Callable[..., Any]
-
-# Convert the video back into the original data format.
-DecodingFunction = Callable[..., Any]
-
-
-@dataclass
-class TestCasePipeline:
-    """A dataclass representing a test case pipeline."""
-
-    name: str
-    prepare: PreparationFunction
-    encode: EncodingFunction
-    decode: DecodingFunction
-    process: Optional[ProcessingFunction] = None
-
-
-# TODO: Create enum package file when this enum is in use.
-@unique
-class FileType(Enum):
-    AUDIO = 0
-    TEXT = 1
-    VIDEO = 2
-
-
-def get_test_data_lookup() -> Dict[FileType, Path]:
-    test_files_lookup = {
-        FileType.AUDIO: TEST_DATA_DIRECTORY / AUDIO_TEST_FILE,
-        FileType.TEXT: TEST_DATA_DIRECTORY / TEXT_TEST_FILE,
-        FileType.VIDEO: TEST_DATA_DIRECTORY / VIDEO_TEST_FILE,
-    }
-
-    for file_path in test_files_lookup.values():
-        if not file_path.exists():
-            raise FileNotFoundError(f"{file_path} not found.")
-
-    return test_files_lookup
-
 
 # endregion

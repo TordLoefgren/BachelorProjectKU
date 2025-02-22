@@ -1,17 +1,23 @@
 """
-A file that contains function for encoding, decoding, and creating QR codes in different formats.
+A module that contains functions for encoding, decoding, and creating QR codes.
 """
 
-from typing import Any, List, Optional, Union
+from typing import List, Optional, Union
 
 import cv2
-import numpy as np
 import qrcode
+from pyzbar.pyzbar import decode
 from qrcode.image.base import BaseImage
+from src.base import VideoEncodingConfiguration
+from src.video_processing import (
+    create_frames_from_video,
+    create_video_from_frames,
+    pil_to_cv2,
+)
 
 
 def generate_qr_code_image(
-    data: str, box_size: int = 10, border: int = 4, fit: bool = True
+    data: bytes, box_size: int = 10, border: int = 4, fit: bool = True
 ) -> BaseImage:
     """
     Generates a QR code image based on the given data.
@@ -32,8 +38,7 @@ def generate_qr_code_image(
 
 def decode_qr_code_image(
     image: Union[BaseImage, cv2.typing.MatLike],
-    detector: Optional[cv2.QRCodeDetector] = None,
-) -> str:
+) -> bytes:
     """
     Decodes a QR code image.
 
@@ -41,17 +46,37 @@ def decode_qr_code_image(
     """
 
     if isinstance(image, BaseImage):
-        image = _pil_to_cv2(image)
+        image = pil_to_cv2(image)
 
-    if detector is None:
-        detector = cv2.QRCodeDetector()
+    decoded_list = decode(image)
+    if not decoded_list:
+        raise ValueError("Decoded list was empty.")
 
-    return detector.detectAndDecode(image)[0]
+    data = decoded_list[0].data
+    if not isinstance(data, bytes):
+        raise ValueError(f"Unexpected value: {type(data)}. Expected bytes.")
+
+    return data
 
 
-def generate_qr_code_sequence_video(
+def qr_encode_data(
+    data: bytes,
+    file_path: str,
+    configuration: Optional[VideoEncodingConfiguration] = None,
+) -> None:
+    """
+    Creates a sequence of QR codes from the given data and creates an encoded video.
+    """
+
+    # TODO: Implement config logic: i.e. customize video creation and reading.
+
+    image = generate_qr_code_image(data)
+    encode_qr_data_to_video([image], file_path)
+
+
+def encode_qr_data_to_video(
     qr_code_images: List[BaseImage],
-    output_filename: str,
+    file_path: str,
     frames_per_second: int = 24,
 ) -> None:
     """
@@ -64,31 +89,14 @@ def generate_qr_code_sequence_video(
     if not qr_code_images:
         return
 
-    # Extract reference frame to determine the video image dimensions.
-    reference_frame = _pil_to_cv2(qr_code_images[0])
-    height, width = reference_frame.shape[:2]
+    # Convert images to image arrays.
+    images = [pil_to_cv2(image) for image in qr_code_images]
 
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    video_writer = cv2.VideoWriter(
-        output_filename, fourcc, frames_per_second, (width, height)
-    )
-
-    for image in qr_code_images:
-        frame = _pil_to_cv2(image)
-
-        # Make sure that the frame is shaped correctly for the writer.
-        # TODO: Consider extracting this to a function for when we have multiple QR codes per frame.
-        if frame.shape[:2] != (height, width):
-            frame = cv2.resize(frame, (width, height))
-
-        video_writer.write(frame)
-
-    video_writer.release()
+    # Generate video from images.
+    create_video_from_frames(images, file_path, frames_per_second)
 
 
-def read_qr_code_sequence_video(
-    input_filename: str, show_window: bool = False
-) -> List[str]:
+def decode_qr_video_to_data(file_path: str, show_window: bool = False) -> bytes:
     """
     Reads and decodes a QR code sequence video.
 
@@ -96,78 +104,15 @@ def read_qr_code_sequence_video(
     https://stackoverflow.com/questions/18954889/how-to-process-images-of-a-video-frame-by-frame-in-video-streaming-using-openc
     """
 
-    decoded_qr_code_data: List[Any] = []
-    capture = cv2.VideoCapture(input_filename)
-    code_detector = cv2.QRCodeDetector()
+    frames = create_frames_from_video(file_path, show_window)
 
-    while capture.isOpened():
-        ret, frame = capture.read()
-        if not ret:
-            break
+    decoded_frames = bytearray()
+    for frame in frames:
+        decoded_frames.extend(decode_qr_code_image(frame))
 
-        if show_window:
-            cv2.imshow(f"Reading '{input_filename}'", frame)
-
-        # TODO: Consider implementing multidetect for several QR code reads per frame.
-        # TODO: Consider only detecting the data and not decoding it here, making it more modular.
-        decoded_info = decode_qr_code_image(frame, code_detector)
-        decoded_qr_code_data.append(decoded_info)
-
-        if show_window and cv2.waitKey(10) & 0xFF == ord("q"):
-            break
-
-    capture.release()
-
-    if show_window:
-        cv2.destroyAllWindows()
-
-    return decoded_qr_code_data
-
-
-def _pil_to_cv2(image: BaseImage) -> cv2.typing.MatLike:
-    """
-    Helper function that converts a PIL image to CV2 image array.
-
-    PIL images are used by 'qrcode' behind the hood.
-
-    We pre-convert the PIL image into RGB for safe conversion to CV2
-
-    'qrcode' GitHub page:
-    https://github.com/lincolnloop/python-qrcode
-    """
-
-    rgb_image = image.convert("RGB")
-    image_array = np.array(rgb_image)
-    cv2_image_array = cv2.cvtColor(image_array, cv2.COLOR_RGB2BGR)
-
-    return cv2_image_array
+    return bytes(decoded_frames)
 
 
 # region ------------ WIP and ideas section ------------
-
-
-def generate_multi_qr_code_image(data: bytes, number_of_qr_codes: int) -> BaseImage:
-    """
-    Generates an image containing several QR codes based on the given data.
-    """
-    # TODO: Consider how best to divide the space between QR codes. This should be decided when looking at the data?
-    pass
-
-
-def generate_qr_code_images(data: bytes) -> List[BaseImage]:
-    """
-    Generates a sequence of QR code images based on the given data.
-    """
-
-    # TODO: Consider how to "chunk" the data. Different QR codes might have different restrictions.
-    pass
-
-
-def _determine_data_chunks(data: bytes):
-    """
-    Helper function that determines how many chunks the given data should be split into.
-    """
-    pass
-
 
 # endregion

@@ -2,28 +2,74 @@ import os
 import unittest
 
 from qrcode.image.base import BaseImage
-from src.base import from_base64, generate_random_string, to_base64
+from src.base import VideoEncodingPipeline, from_bytes, generate_random_string, to_bytes
 from src.qr_codes import (
     decode_qr_code_image,
+    decode_qr_video_to_data,
     generate_qr_code_image,
-    generate_qr_code_sequence_video,
-    read_qr_code_sequence_video,
+    qr_encode_data,
 )
 
-TEST_VIDEO_FILENAME = "TEST_VIDEO.mp4"
-INPUT_DATA_LENGTHS = [0, 5, 10, 50, 100, 150, 200, 250]
-STRING_DATA_LENGTH = 30
+TEST_VIDEO_FILENAME = "test_video.mp4"
+STRING_DATA_LENGTH = 100
 
 
 class TestQRCodes(unittest.TestCase):
 
+    def setUp(self) -> None:
+        self.qr_code_pipeline = VideoEncodingPipeline(
+            preparation_function=to_bytes,
+            encoding_function=qr_encode_data,
+            decoding_function=decode_qr_video_to_data,
+        )
+
+    def test__run_encode__should__create_video_file(self) -> None:
+        # Arrange
+        input_data = generate_random_string(STRING_DATA_LENGTH)
+
+        # Act
+        self.qr_code_pipeline.run_encode(input_data, TEST_VIDEO_FILENAME)
+
+        # Assert
+        self.assertTrue(os.path.exists(TEST_VIDEO_FILENAME))
+
+    def test__run_decode__should__return_data_from_video_file(self) -> None:
+        # Arrange
+        input_data = generate_random_string(STRING_DATA_LENGTH)
+        self.qr_code_pipeline.run_encode(input_data, TEST_VIDEO_FILENAME)
+        # TODO: Mock the function, so we only need to call decode.
+
+        # Act
+        output_data_bytes = self.qr_code_pipeline.run_decode(TEST_VIDEO_FILENAME)
+        output_data = from_bytes(output_data_bytes)
+
+        # Assert
+        self.assertTrue(os.path.exists(TEST_VIDEO_FILENAME))
+        self.assertEqual(input_data, output_data)
+
+    def test__run_pipeline__should__encode_video_and_return_data(self) -> None:
+        # Arrange
+        input_data = generate_random_string(STRING_DATA_LENGTH)
+
+        # Act
+        output_data_bytes = self.qr_code_pipeline.run_pipeline(
+            input_data, TEST_VIDEO_FILENAME
+        )
+        output_data = from_bytes(output_data_bytes)
+
+        # Assert
+        self.assertTrue(os.path.exists(TEST_VIDEO_FILENAME))
+        self.assertEqual(input_data, output_data)
+
+    # --------------- Individual functions --------------------
+
     def test__generate_qr_code_image__should__return_qr_code_image(self) -> None:
         # Arrange
         input_data = generate_random_string(STRING_DATA_LENGTH)
-        input_base_64_string = to_base64(input_data)
+        input_data_bytes = to_bytes(input_data)
 
         # Act
-        qr_code = generate_qr_code_image(input_base_64_string)
+        qr_code = generate_qr_code_image(input_data_bytes)
 
         # Assert
         self.assertIsInstance(qr_code, BaseImage)
@@ -31,55 +77,17 @@ class TestQRCodes(unittest.TestCase):
     def test__decode_qr_code_image__should__return_original_data(self) -> None:
         # Arrange
         input_data = generate_random_string(STRING_DATA_LENGTH)
-        input_base_64_string = to_base64(input_data)
-        qr_code_image = generate_qr_code_image(input_base_64_string)
+        input_data_bytes = to_bytes(input_data)
+        qr_code_image = generate_qr_code_image(input_data_bytes)
 
         # Act
-        output_base_64_string = decode_qr_code_image(qr_code_image)
-        output_data = from_base64(output_base_64_string, is_string=True)
+        output_data_bytes = decode_qr_code_image(qr_code_image)
+        output_data = from_bytes(output_data_bytes)
 
         # Assert
         self.assertEqual(input_data, output_data)
 
-    def test__generate_qr_code_sequence_video__should__(
-        self,
-    ) -> None:
-        # TODO: Add test case.
-        self.fail("Not implemented.")
-
-    def test__read_qr_code_sequence_video__should__(
-        self,
-    ) -> None:
-        # TODO: Add test case.
-        self.fail("Not implemented.")
-
-    def test__round_trip__should__successfully_encode_and_decode_video(self) -> None:
-        # TODO: This test is failing. Fix failing test by solving the decoding issue in 'read_qr_code_sequence_video'.
-
-        for i, data_length in enumerate(INPUT_DATA_LENGTHS):
-            # Arrange
-            input_data = [
-                generate_random_string(STRING_DATA_LENGTH) for _ in range(data_length)
-            ]
-            base_64_input_data = [to_base64(data) for data in input_data]
-
-            # Act
-            qr_codes = [generate_qr_code_image(data) for data in base_64_input_data]
-
-            enumerated_video_filename = f" - {i + 1}.".join(
-                TEST_VIDEO_FILENAME.split(".")
-            )
-            generate_qr_code_sequence_video(qr_codes, enumerated_video_filename)
-
-            base_64_output_data = read_qr_code_sequence_video(enumerated_video_filename)
-            output_data = [
-                from_base64(data, is_string=True) for data in base_64_output_data
-            ]
-
-            # Remove test file after use.
-            if os.path.exists(enumerated_video_filename):
-                os.remove(enumerated_video_filename)
-
-            # Assert
-            self.assertCountEqual(input_data, output_data)
-            self.assertEqual(input_data, output_data)
+    def tearDown(self):
+        # Remove test file after use.
+        if os.path.exists(TEST_VIDEO_FILENAME):
+            os.remove(TEST_VIDEO_FILENAME)

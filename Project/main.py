@@ -1,38 +1,41 @@
 import os
 
-from src.base import from_base64, generate_random_string, to_base64
+from src.base import from_bytes, generate_random_string, to_bytes
 from src.qr_codes import (
+    decode_qr_video_to_data,
+    encode_qr_data_to_video,
     generate_qr_code_image,
-    generate_qr_code_sequence_video,
-    read_qr_code_sequence_video,
 )
 
 STRING_DATA_LENGTH = 30
 NUMBER_OF_FRAMES = 240
+DEMO_FILENAME = "demo_video.mp4"
 
-if __name__ == "__main__":
-    # ----- Short prototype demo ----
+
+def _qr_code_demo():
+    """
+    A prototype demo for QR code encoding and decoding.
+    """
 
     # Create data.
     input_data = [
         generate_random_string(STRING_DATA_LENGTH) for _ in range(NUMBER_OF_FRAMES)
     ]
-    base_64_input_data = [to_base64(data) for data in input_data]
+    input_data_bytes = map(to_bytes, input_data)
 
     # Create QR codes images from that data.
-    qr_codes_image = [generate_qr_code_image(text) for text in base_64_input_data]
+    qr_codes_image = [generate_qr_code_image(data) for data in input_data_bytes]
 
     # Create a video with 24 QR code image frames per second, with a duration of 240 / 24 = 10 seconds.
-    file_name = "demo_video.mp4"
-    generate_qr_code_sequence_video(qr_codes_image, file_name)
+    encode_qr_data_to_video(qr_codes_image, DEMO_FILENAME)
 
     # Capture the video and decode the QR code.
-    base_64_output_data = read_qr_code_sequence_video(file_name, show_window=True)
-    output_data = [from_base64(data, is_string=True) for data in base_64_output_data]
+    output_data_bytes = decode_qr_video_to_data(DEMO_FILENAME, show_window=True)
+    output_data = from_bytes(output_data_bytes)
 
     # Remove video file after use.
-    if os.path.exists(file_name):
-        os.remove(file_name)
+    if os.path.exists(DEMO_FILENAME):
+        os.remove(DEMO_FILENAME)
 
     # Validate input / output.
     failed_qr_codes_readings = 0
@@ -44,3 +47,7 @@ if __name__ == "__main__":
     print(
         f"QR codes read correctly: {NUMBER_OF_FRAMES - failed_qr_codes_readings} / {NUMBER_OF_FRAMES}"
     )
+
+
+if __name__ == "__main__":
+    _qr_code_demo()
