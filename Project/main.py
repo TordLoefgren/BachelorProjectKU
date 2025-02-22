@@ -2,9 +2,10 @@ import os
 
 from src.base import from_bytes, generate_random_string, to_bytes
 from src.qr_codes import (
+    QRVideoEncodingConfiguration,
     decode_qr_video_to_data,
     encode_qr_data_to_video,
-    generate_qr_code_image,
+    generate_qr_image,
 )
 
 STRING_DATA_LENGTH = 30
@@ -22,15 +23,18 @@ def _qr_code_demo():
         generate_random_string(STRING_DATA_LENGTH) for _ in range(NUMBER_OF_FRAMES)
     ]
     input_data_bytes = map(to_bytes, input_data)
+    configuration = QRVideoEncodingConfiguration()
 
     # Create QR codes images from that data.
-    qr_codes_image = [generate_qr_code_image(data) for data in input_data_bytes]
+    qr_code_images = [
+        generate_qr_image(data, configuration) for data in input_data_bytes
+    ]
 
     # Create a video with 24 QR code image frames per second, with a duration of 240 / 24 = 10 seconds.
-    encode_qr_data_to_video(qr_codes_image, DEMO_FILENAME)
+    encode_qr_data_to_video(qr_code_images, DEMO_FILENAME, configuration)
 
     # Capture the video and decode the QR code.
-    output_data_bytes = decode_qr_video_to_data(DEMO_FILENAME, show_window=True)
+    output_data_bytes = decode_qr_video_to_data(DEMO_FILENAME, configuration)
     output_data = from_bytes(output_data_bytes)
 
     # Remove video file after use.

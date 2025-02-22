@@ -4,9 +4,10 @@ import unittest
 from qrcode.image.base import BaseImage
 from src.base import VideoEncodingPipeline, from_bytes, generate_random_string, to_bytes
 from src.qr_codes import (
+    QRVideoEncodingConfiguration,
     decode_qr_code_image,
     decode_qr_video_to_data,
-    generate_qr_code_image,
+    generate_qr_image,
     qr_encode_data,
 )
 
@@ -21,6 +22,7 @@ class TestQRCodes(unittest.TestCase):
             preparation_function=to_bytes,
             encoding_function=qr_encode_data,
             decoding_function=decode_qr_video_to_data,
+            configuration=QRVideoEncodingConfiguration(),
         )
 
     def test__run_encode__should__create_video_file(self) -> None:
@@ -67,9 +69,10 @@ class TestQRCodes(unittest.TestCase):
         # Arrange
         input_data = generate_random_string(STRING_DATA_LENGTH)
         input_data_bytes = to_bytes(input_data)
+        configuration = QRVideoEncodingConfiguration()
 
         # Act
-        qr_code = generate_qr_code_image(input_data_bytes)
+        qr_code = generate_qr_image(input_data_bytes, configuration)
 
         # Assert
         self.assertIsInstance(qr_code, BaseImage)
@@ -78,7 +81,8 @@ class TestQRCodes(unittest.TestCase):
         # Arrange
         input_data = generate_random_string(STRING_DATA_LENGTH)
         input_data_bytes = to_bytes(input_data)
-        qr_code_image = generate_qr_code_image(input_data_bytes)
+        configuration = QRVideoEncodingConfiguration()
+        qr_code_image = generate_qr_image(input_data_bytes, configuration)
 
         # Act
         output_data_bytes = decode_qr_code_image(qr_code_image)

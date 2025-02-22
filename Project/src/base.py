@@ -34,7 +34,7 @@ class EncodingFunction(Protocol):
         self,
         prepared_data: bytes,
         video_file_path: str,
-        configuration: Optional["VideoEncodingConfiguration"] = None,
+        configuration: "VideoEncodingConfiguration",
     ) -> None:
         pass
 
@@ -56,14 +56,15 @@ class DecodingFunction(Protocol):
     def __call__(
         self,
         video_file_path: str,
-        configuration: Optional["VideoEncodingConfiguration"] = None,
+        configuration: "VideoEncodingConfiguration",
     ) -> bytes:
         pass
 
 
 @dataclass
 class VideoEncodingConfiguration:
-    pass
+    frames_per_second: int = 24
+    show_window: bool = False
 
 
 @dataclass
@@ -73,8 +74,8 @@ class VideoEncodingPipeline:
     preparation_function: PreparationFunction
     encoding_function: EncodingFunction
     decoding_function: DecodingFunction
+    configuration: VideoEncodingConfiguration
     processing_function: Optional[ProcessingFunction] = None
-    configuration: Optional[VideoEncodingConfiguration] = None
 
     def run_encode(self, data: Any, video_file_path: str) -> None:
         """

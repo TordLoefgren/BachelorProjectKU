@@ -2,6 +2,7 @@
 A module that contains functions for encoding, decoding, and creating QR codes.
 """
 
+from dataclasses import dataclass
 from typing import List, Optional, Union
 
 import cv2
@@ -9,6 +10,7 @@ import qrcode
 from pyzbar.pyzbar import decode
 from qrcode.image.base import BaseImage
 from src.base import VideoEncodingConfiguration
+from src.enums import QRErrorCorrectLevels
 from src.video_processing import (
     create_frames_from_video,
     create_video_from_frames,
@@ -16,8 +18,18 @@ from src.video_processing import (
 )
 
 
-def generate_qr_code_image(
-    data: bytes, box_size: int = 10, border: int = 4, fit: bool = True
+@dataclass
+class QRVideoEncodingConfiguration(VideoEncodingConfiguration):
+    border: int = 4
+    box_size: int = 10
+    error_correction: QRErrorCorrectLevels = QRErrorCorrectLevels.ERROR_CORRECT_M
+    fit: bool = True
+    qr_codes_per_frame: int = 1
+    version: Optional[int] = None
+
+
+def generate_qr_image(
+    data: bytes, configuration: QRVideoEncodingConfiguration
 ) -> BaseImage:
     """
     Generates a QR code image based on the given data.
@@ -25,13 +37,18 @@ def generate_qr_code_image(
     The data is expected to be a base64 encoded string.
     """
 
-    qr = qrcode.QRCode(box_size=box_size, border=border)
+    qr = qrcode.QRCode(
+        border=configuration.border,
+        box_size=configuration.box_size,
+        error_correction=configuration.error_correction,
+        version=configuration.version,
+    )
 
     # TODO: Consider adding exception handling for when the data size is too large for the QR code.
     qr.add_data(data)
 
     # TODO: If this function is used when creating multiple QR codes per frame, we might look into a custom fit or image factory.
-    qr.make(fit=fit)
+    qr.make(fit=configuration.fit)
 
     return qr.make_image()
 
@@ -60,9 +77,7 @@ def decode_qr_code_image(
 
 
 def qr_encode_data(
-    data: bytes,
-    file_path: str,
-    configuration: Optional[VideoEncodingConfiguration] = None,
+    data: bytes, file_path: str, configuration: QRVideoEncodingConfiguration
 ) -> None:
     """
     Creates a sequence of QR codes from the given data and creates an encoded video.
@@ -70,14 +85,14 @@ def qr_encode_data(
 
     # TODO: Implement config logic: i.e. customize video creation and reading.
 
-    image = generate_qr_code_image(data)
-    encode_qr_data_to_video([image], file_path)
+    image = generate_qr_image(data, configuration)
+    encode_qr_data_to_video([image], file_path, configuration)
 
 
 def encode_qr_data_to_video(
     qr_code_images: List[BaseImage],
     file_path: str,
-    frames_per_second: int = 24,
+    configuration: QRVideoEncodingConfiguration,
 ) -> None:
     """
     Create a video from a list of QR code images.
@@ -93,10 +108,12 @@ def encode_qr_data_to_video(
     images = [pil_to_cv2(image) for image in qr_code_images]
 
     # Generate video from images.
-    create_video_from_frames(images, file_path, frames_per_second)
+    create_video_from_frames(images, file_path, configuration.frames_per_second)
 
 
-def decode_qr_video_to_data(file_path: str, show_window: bool = False) -> bytes:
+def decode_qr_video_to_data(
+    file_path: str, configuration: QRVideoEncodingConfiguration
+) -> bytes:
     """
     Reads and decodes a QR code sequence video.
 
@@ -104,7 +121,7 @@ def decode_qr_video_to_data(file_path: str, show_window: bool = False) -> bytes:
     https://stackoverflow.com/questions/18954889/how-to-process-images-of-a-video-frame-by-frame-in-video-streaming-using-openc
     """
 
-    frames = create_frames_from_video(file_path, show_window)
+    frames = create_frames_from_video(file_path, configuration.show_window)
 
     decoded_frames = bytearray()
     for frame in frames:
