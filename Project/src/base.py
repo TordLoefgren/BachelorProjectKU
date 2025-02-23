@@ -9,19 +9,21 @@ from dataclasses import dataclass
 from pathlib import Path
 from random import choice
 from string import ascii_uppercase
-from typing import Any, Optional, Protocol
+from typing import Any, Optional, Protocol, TypeVar
 
 import numpy as np
 
 UTF_8_ENCODING_STRING = "utf-8"
 
+T = TypeVar("T")
 
-class PreparationFunction(Protocol):
+
+class SerializeFunction(Protocol):
     """
-    Prepare raw test data.
+    Serialize the raw data.
     """
 
-    def __call__(self, data: Any) -> bytes:
+    def __call__(self, data: T) -> bytes:
         pass
 
 
@@ -32,7 +34,7 @@ class EncodingFunction(Protocol):
 
     def __call__(
         self,
-        prepared_data: bytes,
+        serialized_data: bytes,
         video_file_path: str,
         configuration: "VideoEncodingConfiguration",
     ) -> None:
@@ -44,7 +46,7 @@ class ProcessingFunction(Protocol):
     Process the data in some way that emulates what a video service might do.
     """
 
-    def __call__(self, prepared_data: bytes) -> bytes:
+    def __call__(self, data: bytes) -> bytes:
         pass
 
 
@@ -61,6 +63,15 @@ class DecodingFunction(Protocol):
         pass
 
 
+class DeserializeFunction(Protocol):
+    """
+    Deserialize the decoded data.
+    """
+
+    def __call__(self, data: bytes) -> T:
+        pass
+
+
 @dataclass
 class VideoEncodingConfiguration:
     frames_per_second: int = 24
@@ -71,9 +82,10 @@ class VideoEncodingConfiguration:
 class VideoEncodingPipeline:
     """A dataclass representing a video encoding pipeline."""
 
-    preparation_function: PreparationFunction
+    serialize_function: SerializeFunction
     encoding_function: EncodingFunction
     decoding_function: DecodingFunction
+    deserialize_function: SerializeFunction
     configuration: VideoEncodingConfiguration
     processing_function: Optional[ProcessingFunction] = None
 
@@ -82,26 +94,29 @@ class VideoEncodingPipeline:
         Runs the encoding part of the pipeline.
         """
 
-        prepared_data = self.preparation_function(data)
+        serialized_data = self.serialize_function(data)
 
         if self.processing_function is not None:
-            prepared_data = self.processing_function(prepared_data)
+            serialized_data = self.processing_function(serialized_data)
 
-        self.encoding_function(prepared_data, video_file_path, self.configuration)
+        self.encoding_function(serialized_data, video_file_path, self.configuration)
 
-    def run_decode(self, video_file_path: str) -> bytes:
+    def run_decode(self, video_file_path: str) -> T:
         """
         Runs the decoding part of the pipeline.
         """
 
-        return self.decoding_function(video_file_path, self.configuration)
+        decoded_data = self.decoding_function(video_file_path, self.configuration)
 
-    def run_pipeline(self, data: Any, video_file_path: str) -> bytes:
+        return self.deserialize_function(decoded_data)
+
+    def run_pipeline(self, data: T, video_file_path: str) -> T:
         """
         Runs the full pipeline, making a roundtrip.
         """
 
         self.run_encode(data, video_file_path)
+
         return self.run_decode(video_file_path)
 
 

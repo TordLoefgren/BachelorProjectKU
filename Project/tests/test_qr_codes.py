@@ -2,13 +2,12 @@ import os
 import unittest
 
 from qrcode.image.base import BaseImage
-from src.base import VideoEncodingPipeline, from_bytes, generate_random_string, to_bytes
+from src.base import from_bytes, generate_random_string, to_bytes
 from src.qr_codes import (
     QRVideoEncodingConfiguration,
+    create_qr_video_encoding_pipeline,
     decode_qr_code_image,
-    decode_qr_video_to_data,
     generate_qr_image,
-    qr_encode_data,
 )
 
 TEST_VIDEO_FILENAME = "test_video.mp4"
@@ -18,12 +17,7 @@ STRING_DATA_LENGTH = 100
 class TestQRCodes(unittest.TestCase):
 
     def setUp(self) -> None:
-        self.qr_code_pipeline = VideoEncodingPipeline(
-            preparation_function=to_bytes,
-            encoding_function=qr_encode_data,
-            decoding_function=decode_qr_video_to_data,
-            configuration=QRVideoEncodingConfiguration(),
-        )
+        self.qr_code_pipeline = create_qr_video_encoding_pipeline()
 
     def test__run_encode__should__create_video_file(self) -> None:
         # Arrange
@@ -42,8 +36,7 @@ class TestQRCodes(unittest.TestCase):
         # TODO: Mock the function, so we only need to call decode.
 
         # Act
-        output_data_bytes = self.qr_code_pipeline.run_decode(TEST_VIDEO_FILENAME)
-        output_data = from_bytes(output_data_bytes)
+        output_data = self.qr_code_pipeline.run_decode(TEST_VIDEO_FILENAME)
 
         # Assert
         self.assertTrue(os.path.exists(TEST_VIDEO_FILENAME))
@@ -54,10 +47,9 @@ class TestQRCodes(unittest.TestCase):
         input_data = generate_random_string(STRING_DATA_LENGTH)
 
         # Act
-        output_data_bytes = self.qr_code_pipeline.run_pipeline(
+        output_data = self.qr_code_pipeline.run_pipeline(
             input_data, TEST_VIDEO_FILENAME
         )
-        output_data = from_bytes(output_data_bytes)
 
         # Assert
         self.assertTrue(os.path.exists(TEST_VIDEO_FILENAME))

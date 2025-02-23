@@ -9,7 +9,13 @@ import cv2
 import qrcode
 from pyzbar.pyzbar import decode
 from qrcode.image.base import BaseImage
-from src.base import VideoEncodingConfiguration
+from src.base import (
+    ProcessingFunction,
+    VideoEncodingConfiguration,
+    VideoEncodingPipeline,
+    from_bytes,
+    to_bytes,
+)
 from src.enums import QRErrorCorrectLevels
 from src.video_processing import (
     create_frames_from_video,
@@ -128,6 +134,29 @@ def decode_qr_video_to_data(
         decoded_frames.extend(decode_qr_code_image(frame))
 
     return bytes(decoded_frames)
+
+
+def create_qr_video_encoding_pipeline(
+    configuration: Optional[QRVideoEncodingConfiguration] = None,
+    processing_function: Optional[ProcessingFunction] = None,
+) -> VideoEncodingPipeline:
+    """
+    Creates an instance of the QR code video encoding pipeline.
+    """
+
+    if configuration is None:
+        configuration = QRVideoEncodingConfiguration()
+
+    # TODO: Add processing function.
+
+    return VideoEncodingPipeline(
+        serialize_function=to_bytes,
+        encoding_function=qr_encode_data,
+        decoding_function=decode_qr_video_to_data,
+        deserialize_function=from_bytes,
+        configuration=configuration,
+        processing_function=processing_function,
+    )
 
 
 # region ------------ WIP and ideas section ------------
