@@ -7,7 +7,7 @@ import pickle
 import struct
 from dataclasses import dataclass
 from pathlib import Path
-from random import choice
+from random import choice, randbytes
 from string import ascii_uppercase
 from typing import Any, Optional, Protocol, TypeVar
 
@@ -164,6 +164,8 @@ def from_bytes(data: bytes) -> Any:
     if not isinstance(data, bytes):
         raise TypeError(f"Unsupported data type: {type(data)}")
 
+    # TODO: Create decoding for types like in to_bytes.
+
     return data.decode(UTF_8_ENCODING_STRING)
 
 
@@ -173,6 +175,14 @@ def generate_random_string(n: int) -> str:
     """
 
     return "".join(choice(ascii_uppercase) for _ in range(n))
+
+
+def generate_bytes(n: int) -> bytes:
+    """
+    Generates n random bytes.
+    """
+
+    return randbytes(n)
 
 
 def to_base64(data: Any) -> str:
