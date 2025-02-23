@@ -9,22 +9,22 @@ T = TypeVar("T")
 
 
 @overload
-def measure_task_performance(task: Callable[..., None], verbose: bool = False) -> float:
+def measure_task_performance(task: Callable[..., None]) -> float:
     """Overload function for tasks returning None."""
     ...
 
 
 @overload
-def measure_task_performance(
-    task: Callable[..., Any], verbose: bool = False
-) -> Tuple[Any, float]:
+def measure_task_performance(task: Callable[..., Any]) -> Tuple[Any, float]:
     """Overload function for tasks returning Any."""
     ...
 
 
-def measure_task_performance(task: Callable[..., T], verbose: bool = False):
+def measure_task_performance(task: Callable[..., T]):
     """
     Function that wraps a task and times its performance.
+
+    Returns the elapsed time in seconds, or a tuple (result, seconds) if the task returns a non-None value.
     """
 
     start = perf_counter()
@@ -33,9 +33,6 @@ def measure_task_performance(task: Callable[..., T], verbose: bool = False):
 
     duration = perf_counter() - start
 
-    if verbose:
-        print(f"Performance time: {duration:.6f} seconds")
-
     if result is None:
         return duration
 
@@ -43,24 +40,22 @@ def measure_task_performance(task: Callable[..., T], verbose: bool = False):
 
 
 @overload
-async def measure_task_performance_async(
-    task: Awaitable[None], verbose: bool = False
-) -> float:
+async def measure_task_performance_async(task: Awaitable[None]) -> float:
     """Overload function for async tasks returning None."""
     ...
 
 
 @overload
-async def measure_task_performance_async(
-    task: Awaitable[Any], verbose: bool = False
-) -> Tuple[Any, float]:
+async def measure_task_performance_async(task: Awaitable[Any]) -> Tuple[Any, float]:
     """Overload function for async tasks returning Any."""
     ...
 
 
-async def measure_task_performance_async(task: Awaitable[T], verbose: bool = False):
+async def measure_task_performance_async(task: Awaitable[T]):
     """
     Function that wraps an async task and times its performance.
+
+    Returns the elapsed time in seconds, or a tuple (result, seconds) if the task returns a non-None value.
     """
 
     start = perf_counter()
@@ -68,9 +63,6 @@ async def measure_task_performance_async(task: Awaitable[T], verbose: bool = Fal
     result = await task()
 
     duration = perf_counter() - start
-
-    if verbose:
-        print(f"Performance time: {duration:.6f} seconds")
 
     if result is None:
         return duration

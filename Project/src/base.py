@@ -164,33 +164,30 @@ def to_base64(data: Any) -> str:
     """
     Base64-encodes the given data.
 
-    If the data is a string, we first 'utf-8' encode the the data.
+    If the data is not in bytes, we first convert it to bytes.
     """
 
-    # TODO: Add serialiser for other data types.
+    if not isinstance(data, bytes):
+        data = to_bytes(data)
 
-    if isinstance(data, str):
-        data = data.encode(UTF_8_ENCODING_STRING)
     encoded_data = base64.b64encode(data)
 
     return encoded_data.decode(UTF_8_ENCODING_STRING)
 
 
-def from_base64(data: str, is_string: bool = False) -> Any:
+def from_base64(data: str, decode_as_string: bool = False) -> Any:
     """
     Base64-decodes the given data.
 
     If the decoded data is expected to be a string, we first 'utf-8' decode the the data.
     """
 
-    # TODO: Add serialiser for other data types.
+    decoded_bytes = base64.b64decode(data)
 
-    decoded_data = base64.b64decode(data)
-
-    if is_string:
-        return decoded_data.decode(UTF_8_ENCODING_STRING)
-
-    return decoded_data
+    if decode_as_string:
+        return decoded_bytes.decode(UTF_8_ENCODING_STRING)
+    else:
+        return from_bytes(decoded_bytes)
 
 
 # region ------------ WIP and ideas section ------------
