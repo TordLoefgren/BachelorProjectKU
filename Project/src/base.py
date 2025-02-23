@@ -85,7 +85,7 @@ class VideoEncodingPipeline:
     serialize_function: SerializeFunction
     encoding_function: EncodingFunction
     decoding_function: DecodingFunction
-    deserialize_function: SerializeFunction
+    deserialize_function: DeserializeFunction
     configuration: VideoEncodingConfiguration
     processing_function: Optional[ProcessingFunction] = None
 
