@@ -106,7 +106,7 @@ def generate_image_frame(
     size: Tuple[int, int],
 ) -> MatLike:
     """
-    Generates an image frame, based on combined qr images.
+    Generates a QR image frame, based on combined QR images.
     """
 
     frame = Image.new("RGB", size)
@@ -231,7 +231,7 @@ def generate_image_frames(
     images: List[BaseImage], configuration: QRVideoEncodingConfiguration
 ) -> List[MatLike]:
     """
-    Generates a list of image frames, based on combined qr images.
+    Generates a list of QR image frames, based on combined QR images.
     """
 
     frames = []

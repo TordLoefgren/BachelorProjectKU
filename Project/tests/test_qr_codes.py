@@ -73,7 +73,7 @@ class TestQRCodes(unittest.TestCase):
 
     # region ----- Individual functions -----
 
-    def test__qr_encode_data__should__return_correct_number_of_images__when__data_is_chunked(
+    def test__generate_qr_images__should__return_correct_number_of_images__when__data_is_chunked(
         self,
     ) -> None:
 
@@ -90,7 +90,7 @@ class TestQRCodes(unittest.TestCase):
             # Assert
             self.assertEqual(len(images), NUMBER_OF_CHUNKS)
 
-    def test__qr_encode_data__should__return_correct_number_of_images__when__data_is_chunked__and__data_has_remainder(
+    def test__generate_qr_images__should__return_correct_number_of_images__when__data_is_chunked__and__data_has_remainder(
         self,
     ) -> None:
 
