@@ -3,10 +3,11 @@ A module that contains functions for encoding, decoding, and creating QR codes.
 """
 
 from dataclasses import dataclass
-from typing import List, Optional, Union
+from typing import Dict, List, Optional, Tuple, Union
 
-import cv2
 import qrcode
+from cv2.typing import MatLike
+from PIL import Image
 from pyzbar.pyzbar import decode
 from qrcode.image.base import BaseImage
 from src.base import (
@@ -23,15 +24,36 @@ from src.video_processing import (
     pil_to_cv2,
 )
 
+MAX_WIDTH = 1920
+MAX_HEIGHT = 1080
+MAX_SIZE: Tuple[int, int] = (MAX_WIDTH, MAX_HEIGHT)
+
+MAX_QR_WIDTH = 177
+MAX_QR_HEIGHT = 177
+MAX_QR_SIZE: Tuple[int, int] = (MAX_QR_WIDTH, MAX_QR_HEIGHT)
+
+MAX_QR_IMAGES_X = MAX_WIDTH // MAX_QR_WIDTH
+MAX_QR_IMAGES_Y = MAX_HEIGHT // MAX_QR_HEIGHT
+MAX_QR_IMAGES_PER_FRAME = MAX_QR_IMAGES_X * MAX_QR_IMAGES_Y
+
+BYTE_SIZE_LOOKUP: Dict[QRErrorCorrectLevels, int] = {
+    QRErrorCorrectLevels.ERROR_CORRECT_L: 2953,
+    QRErrorCorrectLevels.ERROR_CORRECT_M: 2331,
+    QRErrorCorrectLevels.ERROR_CORRECT_Q: 1663,
+    QRErrorCorrectLevels.ERROR_CORRECT_H: 1273,
+}
+
 
 @dataclass
 class QRVideoEncodingConfiguration(VideoEncodingConfiguration):
+    """
+    A VideoEncodingConfiguration subclass that contains QR code specific metrics.
+    """
+
     border: int = 4
     box_size: int = 10
     error_correction: QRErrorCorrectLevels = QRErrorCorrectLevels.ERROR_CORRECT_M
-    fit: bool = True
     qr_codes_per_frame: int = 1
-    version: Optional[int] = None
 
 
 def generate_qr_image(
@@ -39,28 +61,72 @@ def generate_qr_image(
 ) -> BaseImage:
     """
     Generates a QR code image based on the given data.
-
-    The data is expected to be a base64 encoded string.
     """
+
+    max_bytes = BYTE_SIZE_LOOKUP[configuration.error_correction]
+
+    if len(data) > max_bytes:
+        raise ValueError(
+            f"Data size is {len(data)} bytes. The maximum allowed size for a QR code is {max_bytes} bytes."
+        )
 
     qr = qrcode.QRCode(
         border=configuration.border,
         box_size=configuration.box_size,
         error_correction=configuration.error_correction,
-        version=configuration.version,
     )
 
-    # TODO: Consider adding exception handling for when the data size is too large for the QR code.
     qr.add_data(data)
-
-    # TODO: If this function is used when creating multiple QR codes per frame, we might look into a custom fit or image factory.
-    qr.make(fit=configuration.fit)
+    qr.make(fit=True)
 
     return qr.make_image()
 
 
-def decode_qr_code_image(
-    image: Union[BaseImage, cv2.typing.MatLike],
+def generate_qr_images(
+    data: bytes, configuration: QRVideoEncodingConfiguration
+) -> List[BaseImage]:
+    """
+    Generates a list of QR code images based on chunks of the given data.
+    """
+
+    images: List[BaseImage] = []
+
+    max_bytes = BYTE_SIZE_LOOKUP[configuration.error_correction]
+
+    for i in range(0, len(data), max_bytes):
+        chunk = data[i : i + max_bytes]
+        image = generate_qr_image(chunk, configuration)
+        images.append(image)
+
+    return images
+
+
+def generate_image_frame(
+    images: List[BaseImage],
+    size: Tuple[int, int],
+) -> MatLike:
+    """
+    Generates an image frame, based on combined qr images.
+    """
+
+    frame = Image.new("RGB", size)
+
+    index = 0
+    for x in range(0, size[0], MAX_QR_WIDTH):
+        for y in range(0, size[1], MAX_QR_HEIGHT):
+            current_image = images[index].get_image()
+            Image.Image.paste(frame, current_image, (x, y))
+
+            if index >= len(images):
+                break
+
+            index += 1
+
+    return pil_to_cv2(frame)
+
+
+def decode_qr_image(
+    image: Union[BaseImage, MatLike],
 ) -> bytes:
     """
     Decodes a QR code image.
@@ -73,7 +139,7 @@ def decode_qr_code_image(
 
     decoded_list = decode(image)
     if not decoded_list:
-        raise ValueError("Decoded list was empty.")
+        raise ValueError("The decoding did not yield a result.")
 
     data = decoded_list[0].data
     if not isinstance(data, bytes):
@@ -89,10 +155,9 @@ def qr_encode_data(
     Creates a sequence of QR codes from the given data and creates an encoded video.
     """
 
-    # TODO: Implement config logic: i.e. customize video creation and reading.
-
-    image = generate_qr_image(data, configuration)
-    encode_qr_data_to_video([image], file_path, configuration)
+    images = generate_qr_images(data, configuration)
+    # frames = generate_image_frames(images, configuration)
+    encode_qr_data_to_video(images, file_path, configuration)
 
 
 def encode_qr_data_to_video(
@@ -131,7 +196,7 @@ def decode_qr_video_to_data(
 
     decoded_frames = bytearray()
     for frame in frames:
-        decoded_frames.extend(decode_qr_code_image(frame))
+        decoded_frames.extend(decode_qr_image(frame))
 
     return bytes(decoded_frames)
 
@@ -160,5 +225,33 @@ def create_qr_video_encoding_pipeline(
 
 
 # region ------------ WIP and ideas section ------------
+
+
+def generate_image_frames(
+    images: List[BaseImage], configuration: QRVideoEncodingConfiguration
+) -> List[MatLike]:
+    """
+    Generates a list of image frames, based on combined qr images.
+    """
+
+    frames = []
+
+    if configuration.frames_per_second == 1:
+        return images
+
+    # We determine how many images needs to be combined.
+
+    # We now try to fill out as many full size images as we can.
+    # TODO: Include option to set resolution (maybe a minimum of the size of the largest QR code).
+
+    number_of_combined_images = len(images) // configuration.frames_per_second
+    if number_of_combined_images > MAX_QR_IMAGES_PER_FRAME:
+        raise NotImplementedError()
+
+    # TODO: Determine how to divide the images. Maybe even include a division strategy: fill or space out.
+    # generate_image_frame()
+
+    return frames
+
 
 # endregion

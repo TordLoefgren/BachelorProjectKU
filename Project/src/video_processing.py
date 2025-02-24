@@ -2,15 +2,17 @@
 A module that contains functions for video processing.
 """
 
-from typing import List
+from typing import List, Union
 
 import cv2
 import numpy as np
+from cv2.typing import MatLike
+from PIL.Image import Image
 from qrcode.image.base import BaseImage
 
 
 def create_video_from_frames(
-    frames: List[cv2.typing.MatLike],
+    frames: List[MatLike],
     file_path: str,
     frames_per_second: int = 24,
 ) -> None:
@@ -47,7 +49,7 @@ def create_video_from_frames(
 def create_frames_from_video(
     file_path: str,
     show_window: bool = False,
-) -> List[cv2.typing.MatLike]:
+) -> List[MatLike]:
     """
     Captures a video and returns all the frames.
 
@@ -80,11 +82,11 @@ def create_frames_from_video(
     return frames
 
 
-def pil_to_cv2(image: BaseImage) -> cv2.typing.MatLike:
+def pil_to_cv2(image: Union[BaseImage, Image]) -> MatLike:
     """
     Helper function that converts a PIL image to CV2 image array.
 
-    PIL images are used by 'qrcode' behind the hood.
+    PIL-like images are used by 'qrcode' behind the hood.
 
     We pre-convert the PIL image into RGB for safe conversion to CV2
 
@@ -92,7 +94,11 @@ def pil_to_cv2(image: BaseImage) -> cv2.typing.MatLike:
     https://github.com/lincolnloop/python-qrcode
     """
 
-    rgb_image = image.convert("RGB")
+    if isinstance(image, (BaseImage, Image)):
+        rgb_image = image.convert("RGB")
+    else:
+        raise TypeError(f"Unsupported data type: {type(image)}")
+
     image_array = np.array(rgb_image)
     cv2_image_array = cv2.cvtColor(image_array, cv2.COLOR_RGB2BGR)
 

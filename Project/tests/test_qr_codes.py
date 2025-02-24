@@ -2,22 +2,36 @@ import os
 import unittest
 
 from qrcode.image.base import BaseImage
-from src.base import from_bytes, generate_random_string, to_bytes
+from src.base import from_bytes, generate_bytes, generate_random_string, to_bytes
+from src.enums import QRErrorCorrectLevels
 from src.qr_codes import (
+    BYTE_SIZE_LOOKUP,
     QRVideoEncodingConfiguration,
     create_qr_video_encoding_pipeline,
-    decode_qr_code_image,
+    decode_qr_image,
+    generate_image_frame,
+    generate_image_frames,
     generate_qr_image,
+    generate_qr_images,
 )
 
-TEST_VIDEO_FILENAME = "test_video.mp4"
+ERROR_CORRECT_LEVELS = [
+    QRErrorCorrectLevels.ERROR_CORRECT_L,
+    QRErrorCorrectLevels.ERROR_CORRECT_M,
+    QRErrorCorrectLevels.ERROR_CORRECT_Q,
+    QRErrorCorrectLevels.ERROR_CORRECT_H,
+]
+NUMBER_OF_CHUNKS = 4
 STRING_DATA_LENGTH = 100
+TEST_VIDEO_FILENAME = "test_video.mp4"
 
 
 class TestQRCodes(unittest.TestCase):
 
     def setUp(self) -> None:
         self.qr_code_pipeline = create_qr_video_encoding_pipeline()
+
+    # region ----- Pipeline -----
 
     def test__run_encode__should__create_video_file(self) -> None:
         # Arrange
@@ -55,7 +69,79 @@ class TestQRCodes(unittest.TestCase):
         self.assertTrue(os.path.exists(TEST_VIDEO_FILENAME))
         self.assertEqual(input_data, output_data)
 
-    # --------------- Individual functions --------------------
+    # endregion
+
+    # region ----- Individual functions -----
+
+    def test__qr_encode_data__should__return_correct_number_of_images__when__data_is_chunked(
+        self,
+    ) -> None:
+
+        for level in ERROR_CORRECT_LEVELS:
+            # Arrange
+            max_bytes = BYTE_SIZE_LOOKUP[level]
+
+            input_data_bytes = generate_bytes(NUMBER_OF_CHUNKS * max_bytes)
+            configuration = QRVideoEncodingConfiguration(error_correction=level)
+
+            # Act
+            images = generate_qr_images(input_data_bytes, configuration)
+
+            # Assert
+            self.assertEqual(len(images), NUMBER_OF_CHUNKS)
+
+    def test__qr_encode_data__should__return_correct_number_of_images__when__data_is_chunked__and__data_has_remainder(
+        self,
+    ) -> None:
+
+        for level in ERROR_CORRECT_LEVELS:
+            # Arrange
+            max_bytes = BYTE_SIZE_LOOKUP[level]
+
+            input_data_bytes = generate_bytes(NUMBER_OF_CHUNKS * max_bytes + 1)
+            configuration = QRVideoEncodingConfiguration(error_correction=level)
+
+            # Act
+            images = generate_qr_images(input_data_bytes, configuration)
+
+            # Assert
+            self.assertEqual(len(images), NUMBER_OF_CHUNKS + 1)
+
+    def test__generate_image_frame__should__return_combined_images(self) -> None:
+        for level in ERROR_CORRECT_LEVELS:
+            # Arrange
+            max_bytes = BYTE_SIZE_LOOKUP[level]
+            size = (354, 354)
+
+            input_data_bytes = generate_bytes(NUMBER_OF_CHUNKS * max_bytes)
+            configuration = QRVideoEncodingConfiguration(
+                error_correction=level, frames_per_second=2
+            )
+            images = generate_qr_images(input_data_bytes, configuration)
+
+            # Act
+            frame = generate_image_frame(images, size)
+
+            # Assert
+            self.assertEqual(len(images), NUMBER_OF_CHUNKS)
+            self.assertEqual(frame.shape[:2], size)
+
+    def test__generate_image_frames__should__return_combined_images(self) -> None:
+        for level in ERROR_CORRECT_LEVELS:
+            # Arrange
+            max_bytes = BYTE_SIZE_LOOKUP[level]
+
+            input_data_bytes = generate_bytes(NUMBER_OF_CHUNKS * max_bytes)
+            configuration = QRVideoEncodingConfiguration(
+                error_correction=level, frames_per_second=2
+            )
+            images = generate_qr_images(input_data_bytes, configuration)
+
+            # Act
+            frames = generate_image_frames(images, configuration)
+
+            # Assert
+            self.assertEqual(len(frames), NUMBER_OF_CHUNKS // 2)
 
     def test__generate_qr_code_image__should__return_qr_code_image(self) -> None:
         # Arrange
@@ -77,11 +163,13 @@ class TestQRCodes(unittest.TestCase):
         qr_code_image = generate_qr_image(input_data_bytes, configuration)
 
         # Act
-        output_data_bytes = decode_qr_code_image(qr_code_image)
+        output_data_bytes = decode_qr_image(qr_code_image)
         output_data = from_bytes(output_data_bytes)
 
         # Assert
         self.assertEqual(input_data, output_data)
+
+    # endregion
 
     def tearDown(self):
         # Remove test file after use.
