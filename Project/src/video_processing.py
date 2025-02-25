@@ -105,6 +105,6 @@ def pil_to_cv2(image: Union[BaseImage, Image]) -> MatLike:
     return cv2_image_array
 
 
-# region ------------ WIP and ideas section ------------
+# region ----- WIP and ideas section -----
 
 # endregion

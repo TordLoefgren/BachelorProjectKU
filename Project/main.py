@@ -23,7 +23,7 @@ def _qr_code_demo():
         generate_random_string(STRING_DATA_LENGTH) for _ in range(NUMBER_OF_FRAMES)
     ]
     input_data_bytes = map(to_bytes, input_data)
-    configuration = QRVideoEncodingConfiguration(show_window=True)
+    configuration = QRVideoEncodingConfiguration(show_decoding_window=True)
 
     # Create QR codes images from that data.
     qr_code_images = [

@@ -5,7 +5,7 @@ from qrcode.image.base import BaseImage
 from src.base import from_bytes, generate_bytes, generate_random_string, to_bytes
 from src.enums import QRErrorCorrectLevels
 from src.qr_codes import (
-    BYTE_SIZE_LOOKUP,
+    ERROR_CORRECTION_TO_MAX_BYTES_LOOKUP,
     QRVideoEncodingConfiguration,
     create_qr_video_encoding_pipeline,
     decode_qr_image,
@@ -79,7 +79,7 @@ class TestQRCodes(unittest.TestCase):
 
         for level in ERROR_CORRECT_LEVELS:
             # Arrange
-            max_bytes = BYTE_SIZE_LOOKUP[level]
+            max_bytes = ERROR_CORRECTION_TO_MAX_BYTES_LOOKUP[level]
 
             input_data_bytes = generate_bytes(NUMBER_OF_CHUNKS * max_bytes)
             configuration = QRVideoEncodingConfiguration(error_correction=level)
@@ -96,7 +96,7 @@ class TestQRCodes(unittest.TestCase):
 
         for level in ERROR_CORRECT_LEVELS:
             # Arrange
-            max_bytes = BYTE_SIZE_LOOKUP[level]
+            max_bytes = ERROR_CORRECTION_TO_MAX_BYTES_LOOKUP[level]
 
             input_data_bytes = generate_bytes(NUMBER_OF_CHUNKS * max_bytes + 1)
             configuration = QRVideoEncodingConfiguration(error_correction=level)
@@ -110,7 +110,7 @@ class TestQRCodes(unittest.TestCase):
     def test__generate_image_frame__should__return_combined_images(self) -> None:
         for level in ERROR_CORRECT_LEVELS:
             # Arrange
-            max_bytes = BYTE_SIZE_LOOKUP[level]
+            max_bytes = ERROR_CORRECTION_TO_MAX_BYTES_LOOKUP[level]
             size = (354, 354)
 
             input_data_bytes = generate_bytes(NUMBER_OF_CHUNKS * max_bytes)
@@ -129,7 +129,7 @@ class TestQRCodes(unittest.TestCase):
     def test__generate_image_frames__should__return_combined_images(self) -> None:
         for level in ERROR_CORRECT_LEVELS:
             # Arrange
-            max_bytes = BYTE_SIZE_LOOKUP[level]
+            max_bytes = ERROR_CORRECTION_TO_MAX_BYTES_LOOKUP[level]
 
             input_data_bytes = generate_bytes(NUMBER_OF_CHUNKS * max_bytes)
             configuration = QRVideoEncodingConfiguration(

@@ -75,7 +75,7 @@ class DeserializeFunction(Protocol):
 @dataclass
 class VideoEncodingConfiguration:
     frames_per_second: int = 24
-    show_window: bool = False
+    show_decoding_window: bool = False
 
 
 @dataclass
@@ -215,6 +215,6 @@ def from_base64(data: str, decode_as_string: bool = False) -> Any:
         return from_bytes(decoded_bytes)
 
 
-# region ------------ WIP and ideas section ------------
+# region ----- WIP and ideas section -----
 
 # endregion

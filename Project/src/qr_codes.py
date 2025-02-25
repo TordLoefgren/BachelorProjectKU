@@ -36,7 +36,7 @@ MAX_QR_IMAGES_X = MAX_WIDTH // MAX_QR_WIDTH
 MAX_QR_IMAGES_Y = MAX_HEIGHT // MAX_QR_HEIGHT
 MAX_QR_IMAGES_PER_FRAME = MAX_QR_IMAGES_X * MAX_QR_IMAGES_Y
 
-BYTE_SIZE_LOOKUP: Dict[QRErrorCorrectLevels, int] = {
+ERROR_CORRECTION_TO_MAX_BYTES_LOOKUP: Dict[QRErrorCorrectLevels, int] = {
     QRErrorCorrectLevels.ERROR_CORRECT_L: 2953,
     QRErrorCorrectLevels.ERROR_CORRECT_M: 2331,
     QRErrorCorrectLevels.ERROR_CORRECT_Q: 1663,
@@ -63,7 +63,7 @@ def generate_qr_image(
     Generates a QR code image based on the given data.
     """
 
-    max_bytes = BYTE_SIZE_LOOKUP[configuration.error_correction]
+    max_bytes = ERROR_CORRECTION_TO_MAX_BYTES_LOOKUP[configuration.error_correction]
 
     if len(data) > max_bytes:
         raise ValueError(
@@ -91,7 +91,7 @@ def generate_qr_images(
 
     images: List[BaseImage] = []
 
-    max_bytes = BYTE_SIZE_LOOKUP[configuration.error_correction]
+    max_bytes = ERROR_CORRECTION_TO_MAX_BYTES_LOOKUP[configuration.error_correction]
 
     for i in range(0, len(data), max_bytes):
         chunk = data[i : i + max_bytes]
@@ -114,11 +114,11 @@ def generate_image_frame(
     index = 0
     for x in range(0, size[0], MAX_QR_WIDTH):
         for y in range(0, size[1], MAX_QR_HEIGHT):
-            current_image = images[index].get_image()
-            Image.Image.paste(frame, current_image, (x, y))
-
             if index >= len(images):
                 break
+
+            current_image = images[index].get_image()
+            Image.Image.paste(frame, current_image, (x, y))
 
             index += 1
 
@@ -156,7 +156,9 @@ def qr_encode_data(
     """
 
     images = generate_qr_images(data, configuration)
-    # frames = generate_image_frames(images, configuration)
+
+    #frames = generate_image_frames(images, configuration)
+
     encode_qr_data_to_video(images, file_path, configuration)
 
 
@@ -192,7 +194,7 @@ def decode_qr_video_to_data(
     https://stackoverflow.com/questions/18954889/how-to-process-images-of-a-video-frame-by-frame-in-video-streaming-using-openc
     """
 
-    frames = create_frames_from_video(file_path, configuration.show_window)
+    frames = create_frames_from_video(file_path, configuration.show_decoding_window)
 
     decoded_frames = bytearray()
     for frame in frames:
@@ -224,7 +226,7 @@ def create_qr_video_encoding_pipeline(
     )
 
 
-# region ------------ WIP and ideas section ------------
+# region ----- WIP and ideas section -----
 
 
 def generate_image_frames(
@@ -234,24 +236,31 @@ def generate_image_frames(
     Generates a list of QR image frames, based on combined QR images.
     """
 
+    if not images:
+        return []
+
+    # If every frame contains only a single QR code image each, we just return the QR images as individual frames.
+    if configuration.frames_per_second == 1:
+        return map(images, pil_to_cv2)
+
+    # If we are showing more than one QR code per frame, we need to create a new combined image for every frame.
     frames = []
 
-    if configuration.frames_per_second == 1:
-        return images
 
-    # We determine how many images needs to be combined.
 
-    # We now try to fill out as many full size images as we can.
-    # TODO: Include option to set resolution (maybe a minimum of the size of the largest QR code).
+    length = len(images)
+    combined_images_per_frame = length // configuration.frames_per_second # TODO: Consider using ceil.
 
-    number_of_combined_images = len(images) // configuration.frames_per_second
-    if number_of_combined_images > MAX_QR_IMAGES_PER_FRAME:
-        raise NotImplementedError()
+    if combined_images_per_frame > MAX_QR_IMAGES_PER_FRAME:
+        raise NotImplementedError("More than 60 QR images per frame has not been implemented.")
 
-    # TODO: Determine how to divide the images. Maybe even include a division strategy: fill or space out.
-    # generate_image_frame()
+    for i in range(0, length, max(1, combined_images_per_frame)):
+        image_chunk = images[i : i + combined_images_per_frame]
+
+        # TODO: Find a way to dynamically place the images in a the most efficient grid.
+        new_frame = generate_image_frame(image_chunk, (354, 354)) 
+        frames.append(new_frame)
 
     return frames
-
 
 # endregion
