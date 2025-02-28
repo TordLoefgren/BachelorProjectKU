@@ -14,6 +14,7 @@ from src.qr_codes import (
     generate_qr_image,
     generate_qr_images,
 )
+from src.video_processing import GridLayout, pil_to_cv2
 
 ERROR_CORRECT_LEVELS = [
     QRErrorCorrectLevels.ERROR_CORRECT_L,
@@ -111,20 +112,24 @@ class TestQRCodes(unittest.TestCase):
         for level in ERROR_CORRECT_LEVELS:
             # Arrange
             max_bytes = ERROR_CORRECTION_TO_MAX_BYTES_LOOKUP[level]
-            size = (354, 354)
 
             input_data_bytes = generate_bytes(NUMBER_OF_CHUNKS * max_bytes)
             configuration = QRVideoEncodingConfiguration(
-                error_correction=level, frames_per_second=2
+                error_correction=level,
             )
             images = generate_qr_images(input_data_bytes, configuration)
+            layout = GridLayout(
+                size=(354, 354),
+                rectangles=[(0, 0), (0, 177), (177, 0), (177, 177)],
+                rectangle_indices=[0, 1, 2, 3],
+            )
 
             # Act
-            frame = generate_image_frame(images, size)
+            frame = generate_image_frame(images, layout)
 
             # Assert
             self.assertEqual(len(images), NUMBER_OF_CHUNKS)
-            self.assertEqual(frame.shape[:2], size)
+            self.assertEqual(frame.shape[:2], layout.size)
 
     def test__generate_image_frames__should__return_combined_images(self) -> None:
         for level in ERROR_CORRECT_LEVELS:
@@ -133,7 +138,7 @@ class TestQRCodes(unittest.TestCase):
 
             input_data_bytes = generate_bytes(NUMBER_OF_CHUNKS * max_bytes)
             configuration = QRVideoEncodingConfiguration(
-                error_correction=level, frames_per_second=2
+                error_correction=level, qr_codes_per_frame=2
             )
             images = generate_qr_images(input_data_bytes, configuration)
 
@@ -161,9 +166,10 @@ class TestQRCodes(unittest.TestCase):
         input_data_bytes = to_bytes(input_data)
         configuration = QRVideoEncodingConfiguration()
         qr_code_image = generate_qr_image(input_data_bytes, configuration)
+        qr_code_image_frame = pil_to_cv2(qr_code_image)
 
         # Act
-        output_data_bytes = decode_qr_image(qr_code_image)
+        output_data_bytes = decode_qr_image(qr_code_image_frame)
         output_data = from_bytes(output_data_bytes)
 
         # Assert

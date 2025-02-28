@@ -2,13 +2,22 @@
 A module that contains functions for video processing.
 """
 
-from typing import List, Union
+from dataclasses import dataclass
+from typing import List, Tuple, Union
 
 import cv2
 import numpy as np
 from cv2.typing import MatLike
 from PIL.Image import Image
 from qrcode.image.base import BaseImage
+from rectpack import newPacker
+
+
+@dataclass
+class GridLayout:
+    size: Tuple[int, int]
+    rectangles: List[Tuple[int, int]]
+    rectangle_indices: List[int]
 
 
 def create_video_from_frames(
@@ -27,7 +36,6 @@ def create_video_from_frames(
         return
 
     # Extract reference frame to determine the video image dimensions.
-    # TODO: Handle cases where we want to decide this dynamically.
     reference_frame = frames[0]
     height, width = reference_frame.shape[:2]
 
@@ -57,7 +65,7 @@ def create_frames_from_video(
     https://stackoverflow.com/questions/18954889/how-to-process-images-of-a-video-frame-by-frame-in-video-streaming-using-openc
     """
 
-    # TODO: Returning all frames is very neat, but maybe not the most performant.
+    # TODO: Returning all frames is very neat, but maybe not the most performant solution. Reconsider.
     frames = []
     capture = cv2.VideoCapture(file_path)
 
@@ -82,13 +90,44 @@ def create_frames_from_video(
     return frames
 
 
+def get_grid_layout(
+    bin: Tuple[int, int], rectangles: List[Tuple[int, int]]
+) -> GridLayout:
+    """
+    Computes the optimal X and Y coordinates for a list of rectangles within a given size constraint.
+
+    Using examples from: https://github.com/secnot/rectpack
+
+    Each rectangle is given an index as a unique identifier, maintaing its initial list ordering.
+    """
+
+    packer = newPacker()
+
+    for i, rect in enumerate(rectangles):
+        packer.add_rect(*rect, rid=i)
+
+    packer.add_bin(*bin)
+
+    packer.pack()
+
+    abin = packer[0]
+
+    layout = GridLayout(
+        size=(abin.width, abin.height),
+        rectangles=[(rect.x, rect.y) for rect in abin],
+        rectangle_indices=[rect.rid for rect in abin],
+    )
+
+    return layout
+
+
 def pil_to_cv2(image: Union[BaseImage, Image]) -> MatLike:
     """
     Helper function that converts a PIL image to CV2 image array.
 
     PIL-like images are used by 'qrcode' behind the hood.
 
-    We pre-convert the PIL image into RGB for safe conversion to CV2
+    We pre-convert the PIL image into RGB for safe conversion to CV2.
 
     'qrcode' GitHub page:
     https://github.com/lincolnloop/python-qrcode
