@@ -91,7 +91,9 @@ class VideoEncodingPipeline:
         serialized_data = self.serialize_function(data)
 
         if self.processing_function is not None:
-            serialized_data = self.processing_function(serialized_data)
+            # TODO: Add processing function.
+            # serialized_data = self.processing_function(serialized_data)
+            raise NotImplementedError("Processing function is not implemented.")
 
         self.encoding_function(serialized_data, video_file_path, self.configuration)
 

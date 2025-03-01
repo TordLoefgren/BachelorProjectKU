@@ -6,11 +6,11 @@ from src.enums import QRErrorCorrectLevels
 from src.qr_codes import (
     ERROR_CORRECTION_TO_MAX_BYTES_LOOKUP,
     QRVideoEncodingConfiguration,
+    _decode_qr_image,
+    _generate_image_frame,
+    _generate_qr_image,
     create_qr_video_encoding_pipeline,
-    decode_qr_image,
-    generate_image_frame,
     generate_image_frames,
-    generate_qr_image,
     generate_qr_images,
 )
 from src.utils import (
@@ -132,7 +132,7 @@ class TestQRCodesFunctions(TestCase):
             )
 
             # Act
-            frame = generate_image_frame(images, layout)
+            frame = _generate_image_frame(images, layout)
 
             # Assert
             self.assertEqual(len(images), NUMBER_OF_CHUNKS)
@@ -162,7 +162,7 @@ class TestQRCodesFunctions(TestCase):
         configuration = QRVideoEncodingConfiguration()
 
         # Act
-        qr_code = generate_qr_image(input_data_bytes, configuration)
+        qr_code = _generate_qr_image(input_data_bytes, configuration)
 
         # Assert
         self.assertIsInstance(qr_code, BaseImage)
@@ -172,11 +172,11 @@ class TestQRCodesFunctions(TestCase):
         input_data = generate_random_string(STRING_DATA_LENGTH)
         input_data_bytes = to_bytes(input_data)
         configuration = QRVideoEncodingConfiguration()
-        qr_code_image = generate_qr_image(input_data_bytes, configuration)
+        qr_code_image = _generate_qr_image(input_data_bytes, configuration)
         qr_code_image_frame = pil_to_cv2(qr_code_image)
 
         # Act
-        output_data_bytes = decode_qr_image(qr_code_image_frame)
+        output_data_bytes = _decode_qr_image(qr_code_image_frame)
         output_data = from_bytes(output_data_bytes)
 
         # Assert

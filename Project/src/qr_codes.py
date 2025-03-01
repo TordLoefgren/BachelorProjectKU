@@ -51,9 +51,133 @@ class QRVideoEncodingConfiguration(VideoEncodingConfiguration):
     box_size: int = 10
     error_correction: QRErrorCorrectLevels = QRErrorCorrectLevels.ERROR_CORRECT_M
     qr_codes_per_frame: int = 1
+    chunk_size: Optional[int] = None
 
 
-def generate_qr_image(
+def create_qr_video_encoding_pipeline(
+    configuration: Optional[QRVideoEncodingConfiguration] = None,
+    processing_function: Optional[ProcessingFunction] = None,
+) -> VideoEncodingPipeline:
+    """
+    Creates an instance of the QR code video encoding pipeline.
+    """
+
+    if configuration is None:
+        configuration = QRVideoEncodingConfiguration()
+
+    # TODO: Add processing function.
+    if processing_function is not None:
+        raise NotImplementedError("Processing function is not implemented.")
+
+    return VideoEncodingPipeline(
+        serialize_function=to_bytes,
+        encoding_function=encode_data_to_video,
+        decoding_function=decode_video_to_data,
+        deserialize_function=from_bytes,
+        configuration=configuration,
+        processing_function=processing_function,
+    )
+
+
+def generate_qr_images(
+    data: bytes,
+    configuration: QRVideoEncodingConfiguration,
+) -> List[BaseImage]:
+    """
+    Generates a list of QR code images based on chunks of the given data.
+    """
+
+    images: List[BaseImage] = []
+
+    max_bytes = ERROR_CORRECTION_TO_MAX_BYTES_LOOKUP[configuration.error_correction]
+    if configuration.chunk_size is not None:
+        max_bytes = min(max_bytes, configuration.chunk_size)
+
+    for i in range(0, len(data), max_bytes):
+        chunk = data[i : i + max_bytes]
+        image = _generate_qr_image(chunk, configuration)
+        images.append(image)
+
+    return images
+
+
+def generate_image_frames(
+    images: List[BaseImage], configuration: QRVideoEncodingConfiguration
+) -> List[MatLike]:
+    """
+    Generates a list of QR image frames, based on combined QR images.
+    """
+
+    if not images:
+        return []
+
+    # If the list contains a single image, or if every frame contains a single image each, we simply return the list.
+    image_length = len(images)
+    if configuration.qr_codes_per_frame == 1 or len(images) == 1:
+        return [pil_to_cv2(image) for image in images]
+
+    # If more than one QR code is shown per frame, we need to generate a new combined image for every frame.
+    combined_images_per_frame = image_length // configuration.qr_codes_per_frame
+    if combined_images_per_frame > MAX_QR_IMAGES_PER_FRAME:
+        raise NotImplementedError(
+            "More than 60 QR images per frame has not been implemented."
+        )
+
+    total_frames = math.ceil(image_length / combined_images_per_frame)
+    rectangles = [(image.width, image.width) for image in images]
+
+    frames: List[MatLike] = []
+
+    for i in range(total_frames):
+        # TODO: Determine a way to minimize the image size, given the number and sizes of the frames.
+        # TODO: Make sure that the border and box_size config fields are taken into account when calculating the layout.
+        layout = get_grid_layout(
+            MAX_SIZE, rectangles[i : i + combined_images_per_frame]
+        )
+
+        new_frame = _generate_image_frame(
+            images[i : i + combined_images_per_frame], layout
+        )
+
+        frames.append(new_frame)
+
+    return frames
+
+
+def encode_data_to_video(
+    data: bytes, file_path: str, configuration: QRVideoEncodingConfiguration
+) -> None:
+    """
+    Creates a sequence of QR codes from the given data and creates an encoded video.
+    """
+
+    images = generate_qr_images(data, configuration)
+
+    frames = generate_image_frames(images, configuration)
+
+    create_video_from_frames(frames, file_path, configuration.frames_per_second)
+
+
+def decode_video_to_data(
+    file_path: str, configuration: QRVideoEncodingConfiguration
+) -> bytes:
+    """
+    Reads and decodes a QR code sequence video.
+
+    Inspiration from:
+    https://stackoverflow.com/questions/18954889/how-to-process-images-of-a-video-frame-by-frame-in-video-streaming-using-openc
+    """
+
+    frames = create_frames_from_video(file_path, configuration.show_decoding_window)
+
+    decoded_frames = bytearray()
+    for frame in frames:
+        decoded_frames.extend(_decode_qr_image(frame))
+
+    return bytes(decoded_frames)
+
+
+def _generate_qr_image(
     data: bytes, configuration: QRVideoEncodingConfiguration
 ) -> BaseImage:
     """
@@ -79,26 +203,7 @@ def generate_qr_image(
     return qr.make_image()
 
 
-def generate_qr_images(
-    data: bytes, configuration: QRVideoEncodingConfiguration
-) -> List[BaseImage]:
-    """
-    Generates a list of QR code images based on chunks of the given data.
-    """
-
-    images: List[BaseImage] = []
-
-    max_bytes = ERROR_CORRECTION_TO_MAX_BYTES_LOOKUP[configuration.error_correction]
-
-    for i in range(0, len(data), max_bytes):
-        chunk = data[i : i + max_bytes]
-        image = generate_qr_image(chunk, configuration)
-        images.append(image)
-
-    return images
-
-
-def generate_image_frame(
+def _generate_image_frame(
     images: List[BaseImage],
     layout: GridLayout,
 ) -> MatLike:
@@ -109,7 +214,7 @@ def generate_image_frame(
     frame = Image.new("RGB", layout.size)
 
     for i in range(len(images)):
-        # We maintain a rectangle index as a layout identifier.
+        # We follow the indices set during the layout initialization.
         index = layout.rectangle_indices[i]
         current_image = images[index].get_image()
         Image.Image.paste(frame, current_image, layout.rectangles[index])
@@ -117,55 +222,11 @@ def generate_image_frame(
     return pil_to_cv2(frame)
 
 
-def generate_image_frames(
-    images: List[BaseImage], configuration: QRVideoEncodingConfiguration
-) -> List[MatLike]:
-    """
-    Generates a list of QR image frames, based on combined QR images.
-    """
-
-    if not images:
-        return []
-
-    # If we only have a single image, or if every frame contains a single image each, we return the list.
-    image_length = len(images)
-    if configuration.qr_codes_per_frame == 1 or len(images) == 1:
-        return [pil_to_cv2(image) for image in images]
-
-    # If we are showing more than one QR code per frame, we need to create a new combined image for every frame.
-    combined_images_per_frame = image_length // configuration.qr_codes_per_frame
-    if combined_images_per_frame > MAX_QR_IMAGES_PER_FRAME:
-        raise NotImplementedError(
-            "More than 60 QR images per frame has not been implemented."
-        )
-
-    total_frames = math.ceil(image_length / combined_images_per_frame)
-    rectangles = [(image.width, image.width) for image in images]
-
-    frames: List[MatLike] = []
-
-    for i in range(total_frames):
-        # TODO: Determine a way to minimize the image size, given the number and sizes of the frames.
-        layout = get_grid_layout(
-            MAX_SIZE, rectangles[i : i + combined_images_per_frame]
-        )
-
-        new_frame = generate_image_frame(
-            images[i : i + combined_images_per_frame], layout
-        )
-
-        frames.append(new_frame)
-
-    return frames
-
-
-def decode_qr_image(
+def _decode_qr_image(
     image: MatLike,
 ) -> bytes:
     """
     Decodes a QR code image.
-
-    If the given image is a PIL image, it will first be converted to a CV2 image array.
     """
 
     decoded_list = decode(image)
@@ -177,80 +238,3 @@ def decode_qr_image(
         raise ValueError(f"Unexpected value: {type(data)}. Expected bytes.")
 
     return data
-
-
-def qr_encode_data_to_video(
-    data: bytes, file_path: str, configuration: QRVideoEncodingConfiguration
-) -> None:
-    """
-    Creates a sequence of QR codes from the given data and creates an encoded video.
-    """
-
-    images = generate_qr_images(data, configuration)
-
-    frames = generate_image_frames(images, configuration)
-
-    qr_frames_to_video(frames, file_path, configuration)
-
-
-def qr_frames_to_video(
-    frames: List[MatLike],
-    file_path: str,
-    configuration: QRVideoEncodingConfiguration,
-) -> None:
-    """
-    Create a video from a list of QR code image frames.
-
-    Inspiration from:
-    https://www.tutorialspoint.com/opencv_python/opencv_python_video_images.htm
-    """
-
-    if not frames:
-        return
-
-    # Generate video from images.
-    create_video_from_frames(frames, file_path, configuration.frames_per_second)
-
-
-def decode_qr_video_to_data(
-    file_path: str, configuration: QRVideoEncodingConfiguration
-) -> bytes:
-    """
-    Reads and decodes a QR code sequence video.
-
-    Inspiration from:
-    https://stackoverflow.com/questions/18954889/how-to-process-images-of-a-video-frame-by-frame-in-video-streaming-using-openc
-    """
-
-    frames = create_frames_from_video(file_path, configuration.show_decoding_window)
-
-    decoded_frames = bytearray()
-    for frame in frames:
-        decoded_frames.extend(decode_qr_image(frame))
-
-    return bytes(decoded_frames)
-
-
-def create_qr_video_encoding_pipeline(
-    configuration: Optional[QRVideoEncodingConfiguration] = None,
-    processing_function: Optional[ProcessingFunction] = None,
-) -> VideoEncodingPipeline:
-    """
-    Creates an instance of the QR code video encoding pipeline.
-    """
-
-    if configuration is None:
-        configuration = QRVideoEncodingConfiguration()
-
-    # TODO: Add processing function.
-    if processing_function is not None:
-        raise NotImplementedError("Processing function is not implemented.")
-
-    return VideoEncodingPipeline(
-        serialize_function=to_bytes,
-        encoding_function=qr_encode_data_to_video,
-        decoding_function=decode_qr_video_to_data,
-        deserialize_function=from_bytes,
-        configuration=configuration,
-        processing_function=processing_function,
-    )

@@ -4,13 +4,12 @@ A module containing utility functions that are used by other modules in the pack
 
 import base64
 import os
-import pickle
 import struct
 from pathlib import Path
 from random import choice, randbytes
 from string import ascii_uppercase
 from tkinter import filedialog
-from typing import Any, Optional
+from typing import Any, Optional, Type, Union
 
 import numpy as np
 from src.base import PROJECT_DIRECTORY, UTF_8_ENCODING_STRING
@@ -18,12 +17,12 @@ from src.base import PROJECT_DIRECTORY, UTF_8_ENCODING_STRING
 # region ----- Serialization -----
 
 
-def to_bytes(data: Any) -> bytes:
+ALLOWED_TYPES = Union[bytes, float, int, str, np.ndarray]
+
+
+def to_bytes(data: ALLOWED_TYPES) -> bytes:
     """
     Returns the byte representation of the given data.
-
-    Inspiration from:
-    https://stackoverflow.com/questions/62565944/how-to-convert-any-object-to-a-byte-array-and-keep-it-on-memory
     """
 
     match data:
@@ -36,14 +35,10 @@ def to_bytes(data: Any) -> bytes:
         case np.ndarray():
             return data.tobytes()
         case _:
-            # Collections and objects.
-            try:
-                return pickle.dumps(data)
-            except Exception as e:
-                raise TypeError(f"Unsupported data type: {type(data)}") from e
+            raise TypeError(f"Unsupported data type: {type(data)}.")
 
 
-def from_bytes(data: bytes, data_type: Optional[type] = None) -> Any:
+def from_bytes(data: bytes, data_type: Optional[Type[ALLOWED_TYPES]] = None) -> Any:
     """
     Returns the data represented by the bytes.
     """
@@ -64,11 +59,7 @@ def from_bytes(data: bytes, data_type: Optional[type] = None) -> Any:
         case np.ndarray:
             return np.frombuffer(data)
         case _:
-            # Collections and objects.
-            try:
-                return pickle.loads(data)
-            except Exception as e:
-                raise TypeError(f"Unsupported data type: {type(data)}") from e
+            raise TypeError(f"Unsupported data type: {type(data)}")
 
 
 def to_base64(data: Any) -> str:
@@ -153,9 +144,13 @@ def open_file_dialog() -> str:
     """
     Opens a file dialog and returns the selected file path.
 
-    From: https://stackoverflow.com/questions/52868551/select-file-instead-of-just-folder-in-tkinter?rq=3
+    Inspiration from:
 
-    and https://stackoverflow.com/questions/7994461/choosing-a-file-in-python3?rq=3
+    https://stackoverflow.com/questions/52868551/select-file-instead-of-just-folder-in-tkinter?rq=3
+
+    and
+
+    https://stackoverflow.com/questions/7994461/choosing-a-file-in-python3?rq=3
     """
 
     return filedialog.askopenfilename(initialdir=PROJECT_DIRECTORY)
