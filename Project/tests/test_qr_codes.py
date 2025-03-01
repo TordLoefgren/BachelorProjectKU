@@ -1,8 +1,7 @@
 import os
-import unittest
+from unittest import TestCase
 
 from qrcode.image.base import BaseImage
-from src.base import from_bytes, generate_bytes, generate_random_string, to_bytes
 from src.enums import QRErrorCorrectLevels
 from src.qr_codes import (
     ERROR_CORRECTION_TO_MAX_BYTES_LOOKUP,
@@ -13,6 +12,13 @@ from src.qr_codes import (
     generate_image_frames,
     generate_qr_image,
     generate_qr_images,
+)
+from src.utils import (
+    from_bytes,
+    generate_random_bytes,
+    generate_random_string,
+    remove_file,
+    to_bytes,
 )
 from src.video_processing import GridLayout, pil_to_cv2
 
@@ -27,12 +33,10 @@ STRING_DATA_LENGTH = 100
 TEST_VIDEO_FILENAME = "test_video.mp4"
 
 
-class TestQRCodes(unittest.TestCase):
+class TestQRCodesPipeline(TestCase):
 
     def setUp(self) -> None:
         self.qr_code_pipeline = create_qr_video_encoding_pipeline()
-
-    # region ----- Pipeline -----
 
     def test__run_encode__should__create_video_file(self) -> None:
         # Arrange
@@ -70,9 +74,12 @@ class TestQRCodes(unittest.TestCase):
         self.assertTrue(os.path.exists(TEST_VIDEO_FILENAME))
         self.assertEqual(input_data, output_data)
 
-    # endregion
+    def tearDown(self):
+        # Remove test file after use.
+        remove_file(TEST_VIDEO_FILENAME)
 
-    # region ----- Individual functions -----
+
+class TestQRCodesFunctions(TestCase):
 
     def test__generate_qr_images__should__return_correct_number_of_images__when__data_is_chunked(
         self,
@@ -82,7 +89,7 @@ class TestQRCodes(unittest.TestCase):
             # Arrange
             max_bytes = ERROR_CORRECTION_TO_MAX_BYTES_LOOKUP[level]
 
-            input_data_bytes = generate_bytes(NUMBER_OF_CHUNKS * max_bytes)
+            input_data_bytes = generate_random_bytes(NUMBER_OF_CHUNKS * max_bytes)
             configuration = QRVideoEncodingConfiguration(error_correction=level)
 
             # Act
@@ -99,7 +106,7 @@ class TestQRCodes(unittest.TestCase):
             # Arrange
             max_bytes = ERROR_CORRECTION_TO_MAX_BYTES_LOOKUP[level]
 
-            input_data_bytes = generate_bytes(NUMBER_OF_CHUNKS * max_bytes + 1)
+            input_data_bytes = generate_random_bytes(NUMBER_OF_CHUNKS * max_bytes + 1)
             configuration = QRVideoEncodingConfiguration(error_correction=level)
 
             # Act
@@ -113,7 +120,7 @@ class TestQRCodes(unittest.TestCase):
             # Arrange
             max_bytes = ERROR_CORRECTION_TO_MAX_BYTES_LOOKUP[level]
 
-            input_data_bytes = generate_bytes(NUMBER_OF_CHUNKS * max_bytes)
+            input_data_bytes = generate_random_bytes(NUMBER_OF_CHUNKS * max_bytes)
             configuration = QRVideoEncodingConfiguration(
                 error_correction=level,
             )
@@ -136,7 +143,7 @@ class TestQRCodes(unittest.TestCase):
             # Arrange
             max_bytes = ERROR_CORRECTION_TO_MAX_BYTES_LOOKUP[level]
 
-            input_data_bytes = generate_bytes(NUMBER_OF_CHUNKS * max_bytes)
+            input_data_bytes = generate_random_bytes(NUMBER_OF_CHUNKS * max_bytes)
             configuration = QRVideoEncodingConfiguration(
                 error_correction=level, qr_codes_per_frame=2
             )
@@ -179,5 +186,4 @@ class TestQRCodes(unittest.TestCase):
 
     def tearDown(self):
         # Remove test file after use.
-        if os.path.exists(TEST_VIDEO_FILENAME):
-            os.remove(TEST_VIDEO_FILENAME)
+        remove_file(TEST_VIDEO_FILENAME)

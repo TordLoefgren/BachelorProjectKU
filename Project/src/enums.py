@@ -2,12 +2,7 @@
 A file containing enums that are used by other parts of the package.
 """
 
-from enum import Enum, IntEnum, unique
-
-
-@unique
-class EncodingType(Enum):
-    QR_CODE = 0
+from enum import IntEnum, unique
 
 
 @unique

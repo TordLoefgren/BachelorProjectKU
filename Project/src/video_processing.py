@@ -142,8 +142,3 @@ def pil_to_cv2(image: Union[BaseImage, Image]) -> MatLike:
     cv2_image_array = cv2.cvtColor(image_array, cv2.COLOR_RGB2BGR)
 
     return cv2_image_array
-
-
-# region ----- WIP and ideas section -----
-
-# endregion

@@ -1,6 +1,5 @@
 import os
 
-from src.base import from_bytes, generate_random_string, to_bytes
 from src.qr_codes import (
     QRVideoEncodingConfiguration,
     decode_qr_video_to_data,
@@ -8,6 +7,7 @@ from src.qr_codes import (
     generate_qr_image,
     qr_frames_to_video,
 )
+from src.utils import from_bytes, generate_random_string, to_bytes
 
 STRING_DATA_LENGTH = 30
 NUMBER_OF_FRAMES = 240

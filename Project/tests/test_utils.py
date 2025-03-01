@@ -1,17 +1,16 @@
 import unittest
 
-class TestQRCodes(unittest.TestCase):
+
+class TestUtils(unittest.TestCase):
 
     def setUp(self) -> None:
         # TODO: Add set up.
         pass
 
-    def test__something__should__do_something(self) -> None:
+    def test__function_name__should__do_something(self) -> None:
         # Arrange
 
-
         # Act
-
 
         # Assert
 

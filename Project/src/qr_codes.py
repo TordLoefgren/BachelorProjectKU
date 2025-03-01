@@ -15,10 +15,9 @@ from src.base import (
     ProcessingFunction,
     VideoEncodingConfiguration,
     VideoEncodingPipeline,
-    from_bytes,
-    to_bytes,
 )
 from src.enums import QRErrorCorrectLevels
+from src.utils import from_bytes, to_bytes
 from src.video_processing import (
     GridLayout,
     create_frames_from_video,
@@ -27,16 +26,12 @@ from src.video_processing import (
     pil_to_cv2,
 )
 
-MAX_WIDTH = 1920
-MAX_HEIGHT = 1080
+MAX_WIDTH: int = 1920
+MAX_HEIGHT: int = 1080
+MAX_QR_SIZE: int = 177
+
 MAX_SIZE: Tuple[int, int] = (MAX_WIDTH, MAX_HEIGHT)
-
-MAX_QR_WIDTH = 177
-MAX_QR_HEIGHT = 177
-
-MAX_QR_IMAGES_X = MAX_WIDTH // MAX_QR_WIDTH
-MAX_QR_IMAGES_Y = MAX_HEIGHT // MAX_QR_HEIGHT
-MAX_QR_IMAGES_PER_FRAME = MAX_QR_IMAGES_X * MAX_QR_IMAGES_Y
+MAX_QR_IMAGES_PER_FRAME: int = (MAX_WIDTH // MAX_QR_SIZE) * (MAX_HEIGHT // MAX_QR_SIZE)
 
 ERROR_CORRECTION_TO_MAX_BYTES_LOOKUP: Dict[QRErrorCorrectLevels, int] = {
     QRErrorCorrectLevels.ERROR_CORRECT_L: 2953,
@@ -259,9 +254,3 @@ def create_qr_video_encoding_pipeline(
         configuration=configuration,
         processing_function=processing_function,
     )
-
-
-# region ----- WIP and ideas section -----
-
-
-# endregion
