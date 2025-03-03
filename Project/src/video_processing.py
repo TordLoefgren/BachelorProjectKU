@@ -8,7 +8,7 @@ from typing import List, Tuple, Union
 import cv2
 import numpy as np
 from cv2.typing import MatLike
-from PIL.Image import Image
+from PIL.Image import Image, fromarray
 from qrcode.image.base import BaseImage
 from rectpack import newPacker
 
@@ -142,3 +142,17 @@ def pil_to_cv2(image: Union[BaseImage, Image]) -> MatLike:
     cv2_image_array = cv2.cvtColor(image_array, cv2.COLOR_RGB2BGR)
 
     return cv2_image_array
+
+
+def cv2_to_pil(cv2_image_array: MatLike) -> Image:
+    """
+    Helper function that converts a CV2 image array to PIL image.
+
+    Inspiration from:
+    https://www.geeksforgeeks.org/convert-opencv-image-to-pil-image-in-python/
+    """
+
+    image_array = cv2.cvtColor(np.array(cv2_image_array), cv2.COLOR_BGR2RGB)
+    pil_image = fromarray(image_array)
+
+    return pil_image

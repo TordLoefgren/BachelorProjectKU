@@ -26,12 +26,9 @@ from src.video_processing import (
     pil_to_cv2,
 )
 
-MAX_WIDTH: int = 1920
-MAX_HEIGHT: int = 1080
-MAX_QR_SIZE: int = 177
-
-MAX_SIZE: Tuple[int, int] = (MAX_WIDTH, MAX_HEIGHT)
-MAX_QR_IMAGES_PER_FRAME: int = (MAX_WIDTH // MAX_QR_SIZE) * (MAX_HEIGHT // MAX_QR_SIZE)
+# TODO: The max size should be determined dynamically or through the configuration.
+# We set a max size in order to experiment with multi-QR code frames.
+MAX_SIZE: Tuple[int, int] = (4000, 4000)
 
 ERROR_CORRECTION_TO_MAX_BYTES_LOOKUP: Dict[QRErrorCorrectLevels, int] = {
     QRErrorCorrectLevels.ERROR_CORRECT_L: 2953,
@@ -91,7 +88,7 @@ def generate_qr_images(
 
     max_bytes = ERROR_CORRECTION_TO_MAX_BYTES_LOOKUP[configuration.error_correction]
     if configuration.chunk_size is not None:
-        max_bytes = min(max_bytes, configuration.chunk_size)
+        max_bytes = min(configuration.chunk_size, max_bytes)
 
     for i in range(0, len(data), max_bytes):
         chunk = data[i : i + max_bytes]
@@ -112,31 +109,30 @@ def generate_image_frames(
         return []
 
     # If the list contains a single image, or if every frame contains a single image each, we simply return the list.
-    image_length = len(images)
     if configuration.qr_codes_per_frame == 1 or len(images) == 1:
         return [pil_to_cv2(image) for image in images]
 
     # If more than one QR code is shown per frame, we need to generate a new combined image for every frame.
-    combined_images_per_frame = image_length // configuration.qr_codes_per_frame
-    if combined_images_per_frame > MAX_QR_IMAGES_PER_FRAME:
-        raise NotImplementedError(
-            "More than 60 QR images per frame has not been implemented."
-        )
+    total_frames = math.ceil(len(images) / configuration.qr_codes_per_frame)
 
-    total_frames = math.ceil(image_length / combined_images_per_frame)
-    rectangles = [(image.width, image.width) for image in images]
+    # TODO: Determine a way to minimize the image size, given the number and sizes of the frames.
 
     frames: List[MatLike] = []
 
+    rectangles = [(image.pixel_size, image.pixel_size) for image in images]
+
     for i in range(total_frames):
-        # TODO: Determine a way to minimize the image size, given the number and sizes of the frames.
-        # TODO: Make sure that the border and box_size config fields are taken into account when calculating the layout.
+        start = i * configuration.qr_codes_per_frame
+        stop = (i + 1) * configuration.qr_codes_per_frame
+
         layout = get_grid_layout(
-            MAX_SIZE, rectangles[i : i + combined_images_per_frame]
+            MAX_SIZE,
+            rectangles[start:stop],
         )
 
         new_frame = _generate_image_frame(
-            images[i : i + combined_images_per_frame], layout
+            images[start:stop],
+            layout,
         )
 
         frames.append(new_frame)
@@ -148,7 +144,7 @@ def encode_data_to_video(
     data: bytes, file_path: str, configuration: QRVideoEncodingConfiguration
 ) -> None:
     """
-    Creates a sequence of QR codes from the given data and creates an encoded video.
+    Generates a sequence of QR code images from the given data and creates a video file with these images as frames.
     """
 
     images = generate_qr_images(data, configuration)
@@ -226,15 +222,23 @@ def _decode_qr_image(
     image: MatLike,
 ) -> bytes:
     """
-    Decodes a QR code image.
+    Decodes a QR code image and returns the resulting bytes data.
+
+    If the image contains more than one QR code, all codes are decoded.
     """
 
     decoded_list = decode(image)
     if not decoded_list:
-        raise ValueError("The decoding did not yield a result.")
+        raise ValueError("The decoding did not yield any results.")
 
-    data = decoded_list[0].data
-    if not isinstance(data, bytes):
-        raise ValueError(f"Unexpected value: {type(data)}. Expected bytes.")
+    data = bytearray()
 
-    return data
+    for decoded_item in decoded_list:
+        data.extend(decoded_item.data)
+
+    result = bytes(data)
+
+    if not isinstance(result, bytes):
+        raise ValueError(f"Unexpected value: {type(result)}. Expected bytes.")
+
+    return result

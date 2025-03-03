@@ -1,15 +1,8 @@
-import os
+from src.performance import measure_task_performance
+from src.qr_codes import QRVideoEncodingConfiguration, create_qr_video_encoding_pipeline
+from src.utils import generate_random_string, remove_file
 
-from src.qr_codes import (
-    QRVideoEncodingConfiguration,
-    decode_video_to_data,
-    generate_image_frames,
-    generate_qr_images,
-)
-from src.utils import from_bytes, generate_random_string, to_bytes
-from src.video_processing import create_video_from_frames
-
-STRING_DATA_LENGTH = 30
+CHUNK_SIZE = 30
 NUMBER_OF_FRAMES = 240
 DEMO_FILENAME = "demo_video.mp4"
 
@@ -19,44 +12,43 @@ def _qr_code_demo():
     A prototype demo for QR code encoding and decoding.
     """
 
+    print("Running a QR encoding pipeline demo...\n")
+
     # Create data.
-    input_data = "".join(
-        generate_random_string(STRING_DATA_LENGTH) for _ in range(NUMBER_OF_FRAMES)
-    )
-    input_data_bytes = bytearray()
-    for data in input_data:
-        input_data_bytes.extend(to_bytes(data))
+    input_data = generate_random_string(CHUNK_SIZE * NUMBER_OF_FRAMES)
 
+    # Build pipeline.
     configuration = QRVideoEncodingConfiguration(
-        show_decoding_window=True, chunk_size=STRING_DATA_LENGTH
+        show_decoding_window=True, chunk_size=CHUNK_SIZE
     )
-    # Create QR codes images from that data.
-    qr_code_images = generate_qr_images(bytes(input_data_bytes), configuration)
+    pipeline = create_qr_video_encoding_pipeline(configuration=configuration)
 
-    # Create a video with 24 QR code image frames per second, with a duration of 240 / 24 = 10 seconds.
-    qr_code_frames = generate_image_frames(qr_code_images, configuration)
-    create_video_from_frames(
-        qr_code_frames, DEMO_FILENAME, configuration.frames_per_second
+    # Run pipeline.
+    print("Encoding...")
+    encode_duration = measure_task_performance(
+        lambda: pipeline.run_encode(input_data, DEMO_FILENAME)
     )
+    print(f"Finished in {encode_duration:.4f} seconds.\n")
 
-    # Capture the video and decode the QR code.
-    output_data_bytes = decode_video_to_data(DEMO_FILENAME, configuration)
-    output_data = from_bytes(output_data_bytes)
-
-    # Remove video file after use.
-    if os.path.exists(DEMO_FILENAME):
-        os.remove(DEMO_FILENAME)
+    print("Decoding...")
+    output_data, decode_duration = measure_task_performance(
+        lambda: pipeline.run_pipeline(input_data, DEMO_FILENAME)
+    )
+    print(f"Finished in {decode_duration:.4f} seconds.\n")
 
     # Validate input / output.
-    failed_qr_codes_readings = 0
-    for input in input_data:
-        if input not in output_data:
-            failed_qr_codes_readings += 1
+    failed_qr_codes_readings = sum(
+        1 for input in input_data if input not in output_data
+    )
 
-    # Print the result.
+    # Showcase results.
     print(
         f"QR codes read correctly: {NUMBER_OF_FRAMES - failed_qr_codes_readings} / {NUMBER_OF_FRAMES}"
     )
+    print("Success!" if failed_qr_codes_readings == 0 else "Failure!")
+
+    # Remove demo video file after use.
+    remove_file(DEMO_FILENAME)
 
 
 if __name__ == "__main__":

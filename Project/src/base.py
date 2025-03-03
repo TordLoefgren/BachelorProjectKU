@@ -23,7 +23,7 @@ class SerializeFunction(Protocol):
 
 class EncodingFunction(Protocol):
     """
-    Convert test data into video format, using a specified encoding.
+    Convert data into video format, using a specified encoding.
     """
 
     def __call__(
