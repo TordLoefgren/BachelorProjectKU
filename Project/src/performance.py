@@ -2,8 +2,19 @@
 A module that contains functions used for measuring the performance of tasks.
 """
 
+from concurrent.futures import ProcessPoolExecutor
 from time import perf_counter
-from typing import Any, Awaitable, Callable, Tuple, TypeVar, overload
+from typing import (
+    Any,
+    Awaitable,
+    Callable,
+    Iterable,
+    List,
+    Optional,
+    Tuple,
+    TypeVar,
+    overload,
+)
 
 T = TypeVar("T")
 
@@ -68,3 +79,26 @@ async def measure_task_performance_async(task: Awaitable[T]):
         return duration
 
     return result, duration
+
+
+def execute_parallel_tasks(
+    tasks: Iterable[Callable[..., T]], max_workers: Optional[int] = None
+) -> List[T]:
+    """
+    A function that executes tasks in parallel and returns the results.
+    """
+
+    results: List[T]
+
+    with ProcessPoolExecutor(max_workers) as executor:
+        results = executor.map(_run_task, tasks)
+
+    return results
+
+
+def _run_task(task: Callable[..., T]) -> T:
+    """
+    Helper method that allows the executor in execute_parallel_tasks to execute functions in its map function.
+    """
+
+    return task()

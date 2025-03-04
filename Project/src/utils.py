@@ -131,6 +131,15 @@ def read_file_as_binary(file_path: Path) -> bytes:
         return f.read()
 
 
+def write_file_as_binary(data: bytes, file_path: Path) -> None:
+    """
+    Attempts to write the binary content of the given file path.
+    """
+
+    with open(file_path, mode="wb") as f:
+        return f.write(data)
+
+
 def remove_file(file_path: Path) -> None:
     """
     Removes the file in the given file path if it exists.

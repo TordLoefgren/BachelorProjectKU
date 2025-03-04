@@ -4,19 +4,23 @@ A module that contains functions for encoding, decoding, and creating QR codes.
 
 import math
 from dataclasses import dataclass
+from functools import partial
 from typing import Dict, List, Optional, Tuple
 
 import qrcode
 from cv2.typing import MatLike
 from PIL import Image
-from pyzbar.pyzbar import decode
+from pyzbar.pyzbar import ZBarSymbol, decode
 from qrcode.image.base import BaseImage
 from src.base import (
+    DeserializeFunction,
     ProcessingFunction,
+    SerializeFunction,
     VideoEncodingConfiguration,
     VideoEncodingPipeline,
 )
 from src.enums import QRErrorCorrectLevels
+from src.performance import execute_parallel_tasks, measure_task_performance
 from src.utils import from_bytes, to_bytes
 from src.video_processing import (
     GridLayout,
@@ -52,6 +56,8 @@ class QRVideoEncodingConfiguration(VideoEncodingConfiguration):
 
 
 def create_qr_video_encoding_pipeline(
+    serialize_function: Optional[SerializeFunction] = to_bytes,
+    deserialize_function: Optional[DeserializeFunction] = from_bytes,
     configuration: Optional[QRVideoEncodingConfiguration] = None,
     processing_function: Optional[ProcessingFunction] = None,
 ) -> VideoEncodingPipeline:
@@ -67,11 +73,11 @@ def create_qr_video_encoding_pipeline(
         raise NotImplementedError("Processing function is not implemented.")
 
     return VideoEncodingPipeline(
-        serialize_function=to_bytes,
         encoding_function=encode_data_to_video,
         decoding_function=decode_video_to_data,
-        deserialize_function=from_bytes,
         configuration=configuration,
+        serialize_function=serialize_function,
+        deserialize_function=deserialize_function,
         processing_function=processing_function,
     )
 
@@ -79,7 +85,7 @@ def create_qr_video_encoding_pipeline(
 def generate_qr_images(
     data: bytes,
     configuration: QRVideoEncodingConfiguration,
-) -> List[BaseImage]:
+) -> List[MatLike]:
     """
     Generates a list of QR code images based on chunks of the given data.
     """
@@ -90,10 +96,18 @@ def generate_qr_images(
     if configuration.chunk_size is not None:
         max_bytes = min(configuration.chunk_size, max_bytes)
 
-    for i in range(0, len(data), max_bytes):
-        chunk = data[i : i + max_bytes]
-        image = _generate_qr_image(chunk, configuration)
-        images.append(image)
+    if configuration.enable_parallelization:
+        return execute_parallel_tasks(
+            [
+                partial(_generate_qr_image, data[i : i + max_bytes], configuration)
+                for i in range(0, len(data), max_bytes)
+            ],
+            configuration.max_workers,
+        )
+    else:
+        for i in range(0, len(data), max_bytes):
+            image = _generate_qr_image(data[i : i + max_bytes], configuration)
+            images.append(image)
 
     return images
 
@@ -110,7 +124,10 @@ def generate_image_frames(
 
     # If the list contains a single image, or if every frame contains a single image each, we simply return the list.
     if configuration.qr_codes_per_frame == 1 or len(images) == 1:
-        return [pil_to_cv2(image) for image in images]
+        return [
+            pil_to_cv2(image) if not isinstance(image, MatLike) else image
+            for image in images
+        ]
 
     # If more than one QR code is shown per frame, we need to generate a new combined image for every frame.
     total_frames = math.ceil(len(images) / configuration.qr_codes_per_frame)
@@ -147,11 +164,22 @@ def encode_data_to_video(
     Generates a sequence of QR code images from the given data and creates a video file with these images as frames.
     """
 
-    images = generate_qr_images(data, configuration)
+    images, duration = measure_task_performance(
+        lambda: generate_qr_images(data, configuration)
+    )
+    print(f"Finished creating images in {duration:.4f} seconds.")
 
-    frames = generate_image_frames(images, configuration)
+    frames, duration = measure_task_performance(
+        lambda: generate_image_frames(images, configuration)
+    )
+    print(f"Finished creating frames in {duration:.4f} seconds.")
 
-    create_video_from_frames(frames, file_path, configuration.frames_per_second)
+    duration = measure_task_performance(
+        lambda: create_video_from_frames(
+            frames, file_path, configuration.frames_per_second
+        )
+    )
+    print(f"Finished creating video in {duration:.4f} seconds.\n")
 
 
 def decode_video_to_data(
@@ -164,11 +192,22 @@ def decode_video_to_data(
     https://stackoverflow.com/questions/18954889/how-to-process-images-of-a-video-frame-by-frame-in-video-streaming-using-openc
     """
 
-    frames = create_frames_from_video(file_path, configuration.show_decoding_window)
+    frames: List[MatLike] = create_frames_from_video(
+        file_path, configuration.show_decoding_window
+    )
 
     decoded_frames = bytearray()
-    for frame in frames:
-        decoded_frames.extend(_decode_qr_image(frame))
+
+    if configuration.enable_parallelization:
+        results = execute_parallel_tasks(
+            [partial(_decode_qr_image, frame) for frame in frames],
+            configuration.max_workers,
+        )
+        for result in results:
+            decoded_frames.extend(result)
+    else:
+        for frame in frames:
+            decoded_frames.extend(_decode_qr_image(frame))
 
     return bytes(decoded_frames)
 
@@ -196,7 +235,7 @@ def _generate_qr_image(
     qr.add_data(data)
     qr.make(fit=True)
 
-    return qr.make_image()
+    return pil_to_cv2(qr.make_image())
 
 
 def _generate_image_frame(
@@ -227,7 +266,7 @@ def _decode_qr_image(
     If the image contains more than one QR code, all codes are decoded.
     """
 
-    decoded_list = decode(image)
+    decoded_list = decode(image, [ZBarSymbol.QRCODE])
     if not decoded_list:
         raise ValueError("The decoding did not yield any results.")
 

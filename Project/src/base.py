@@ -70,17 +70,19 @@ class DeserializeFunction(Protocol):
 class VideoEncodingConfiguration:
     frames_per_second: int = 24
     show_decoding_window: bool = False
+    enable_parallelization: bool = False
+    max_workers: Optional[int] = None
 
 
 @dataclass
 class VideoEncodingPipeline:
     """A dataclass representing a video encoding pipeline."""
 
-    serialize_function: SerializeFunction
     encoding_function: EncodingFunction
     decoding_function: DecodingFunction
-    deserialize_function: DeserializeFunction
     configuration: VideoEncodingConfiguration
+    serialize_function: Optional[SerializeFunction] = None
+    deserialize_function: Optional[DeserializeFunction] = None
     processing_function: Optional[ProcessingFunction] = None
 
     def run_encode(self, data: Any, video_file_path: str) -> None:
@@ -88,23 +90,27 @@ class VideoEncodingPipeline:
         Runs the encoding part of the pipeline.
         """
 
-        serialized_data = self.serialize_function(data)
+        if self.serialize_function:
+            data = self.serialize_function(data)
 
         if self.processing_function is not None:
             # TODO: Add processing function.
             # serialized_data = self.processing_function(serialized_data)
             raise NotImplementedError("Processing function is not implemented.")
 
-        self.encoding_function(serialized_data, video_file_path, self.configuration)
+        self.encoding_function(data, video_file_path, self.configuration)
 
     def run_decode(self, video_file_path: str) -> T:
         """
         Runs the decoding part of the pipeline.
         """
 
-        decoded_data = self.decoding_function(video_file_path, self.configuration)
+        data = self.decoding_function(video_file_path, self.configuration)
 
-        return self.deserialize_function(decoded_data)
+        if self.deserialize_function:
+            data = self.deserialize_function(data)
+
+        return data
 
     def run_pipeline(self, data: T, video_file_path: str) -> T:
         """

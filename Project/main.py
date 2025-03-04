@@ -1,6 +1,15 @@
+from pathlib import Path
+
+from src.enums import QRErrorCorrectLevels
 from src.performance import measure_task_performance
 from src.qr_codes import QRVideoEncodingConfiguration, create_qr_video_encoding_pipeline
-from src.utils import generate_random_string, remove_file
+from src.utils import (
+    generate_random_string,
+    open_file_dialog,
+    read_file_as_binary,
+    remove_file,
+    write_file_as_binary,
+)
 
 CHUNK_SIZE = 30
 NUMBER_OF_FRAMES = 240
@@ -32,7 +41,7 @@ def _qr_code_demo():
 
     print("Decoding...")
     output_data, decode_duration = measure_task_performance(
-        lambda: pipeline.run_pipeline(input_data, DEMO_FILENAME)
+        lambda: pipeline.run_decode(input_data, DEMO_FILENAME)
     )
     print(f"Finished in {decode_duration:.4f} seconds.\n")
 
@@ -52,4 +61,40 @@ def _qr_code_demo():
 
 
 if __name__ == "__main__":
-    _qr_code_demo()
+    # _qr_code_demo()
+
+    file_name = Path(open_file_dialog())
+
+    pipeline = create_qr_video_encoding_pipeline(
+        serialize_function=None,
+        deserialize_function=None,
+        configuration=QRVideoEncodingConfiguration(
+            error_correction=QRErrorCorrectLevels.ERROR_CORRECT_H,
+            enable_parallelization=False,
+        ),
+    )
+
+    print("--- Running QR encoding pipeline ---\n")
+
+    input = read_file_as_binary(Path(file_name))
+
+    # Run pipeline.
+    print("Encoding...")
+    encode_duration = measure_task_performance(
+        lambda: pipeline.run_encode(input, DEMO_FILENAME)
+    )
+    print(f"Finished encoding in {encode_duration:.4f} seconds.\n")
+
+    print("Decoding...\n")
+    output, decode_duration = measure_task_performance(
+        lambda: pipeline.run_decode(DEMO_FILENAME)
+    )
+    print(f"Finished decoding in {decode_duration:.4f} seconds.\n\n")
+
+    print(len(input) == len(output))
+
+    write_file_as_binary(output, Path("output.pdf"))
+
+    print(
+        f"Finished pipeline roundtrip after {encode_duration + decode_duration:.4f} seconds."
+    )
