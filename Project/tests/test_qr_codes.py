@@ -1,7 +1,7 @@
 import os
 from unittest import TestCase
 
-from src.enums import QRErrorCorrectLevels
+from src.enums import QRErrorCorrectionLevel
 from src.qr_codes import (
     ERROR_CORRECTION_TO_MAX_BYTES_LOOKUP,
     QRVideoEncodingConfiguration,
@@ -20,10 +20,10 @@ from src.utils import (
 )
 from src.video_processing import pil_to_cv2
 
-ERROR_CORRECT_L = QRErrorCorrectLevels.ERROR_CORRECT_L
-ERROR_CORRECT_M = QRErrorCorrectLevels.ERROR_CORRECT_M
-ERROR_CORRECT_Q = QRErrorCorrectLevels.ERROR_CORRECT_Q
-ERROR_CORRECT_H = QRErrorCorrectLevels.ERROR_CORRECT_H
+ERROR_CORRECT_L = QRErrorCorrectionLevel.L
+ERROR_CORRECT_M = QRErrorCorrectionLevel.M
+ERROR_CORRECT_Q = QRErrorCorrectionLevel.Q
+ERROR_CORRECT_H = QRErrorCorrectionLevel.H
 
 STRING_DATA_LENGTH = 100
 TEST_VIDEO_FILENAME = "test_video.mp4"

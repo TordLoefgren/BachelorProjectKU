@@ -2,16 +2,26 @@
 A file containing enums that are used by other parts of the package.
 """
 
-from enum import IntEnum, unique
+from enum import Enum, unique
 
 
 @unique
-class QRErrorCorrectLevels(IntEnum):
+class QRErrorCorrectionLevel(Enum):
     """
-    Can be mapped to the error correct levels in the 'qrcodes' package.
+    Error correction level for QR codes.
     """
 
-    ERROR_CORRECT_L = 1
-    ERROR_CORRECT_M = 0
-    ERROR_CORRECT_Q = 3
-    ERROR_CORRECT_H = 2
+    L = 0
+    M = 1
+    Q = 2
+    H = 3
+
+
+@unique
+class QRPackage(Enum):
+    """
+    QR code packages in use.
+    """
+
+    SEGNO = 0
+    QRCODE = 1

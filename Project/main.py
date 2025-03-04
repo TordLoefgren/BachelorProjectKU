@@ -1,7 +1,4 @@
-from pathlib import Path
-
-from src.enums import QRErrorCorrectLevels
-from src.performance import measure_task_performance
+from src.enums import QRPackage
 from src.qr_codes import QRVideoEncodingConfiguration, create_qr_video_encoding_pipeline
 from src.utils import (
     generate_random_string,
@@ -16,34 +13,57 @@ NUMBER_OF_FRAMES = 240
 DEMO_FILENAME = "demo_video.mp4"
 
 
-def _qr_code_demo():
+def _qr_code_demo_manual() -> None:
+    """
+    A prototype demo for QR code encoding and decoding - choose file manually.
+    """
+
+    # Get data.
+    file_name = open_file_dialog()
+    input_data = read_file_as_binary(file_name)
+
+    # Build pipeline.
+    configuration = QRVideoEncodingConfiguration(
+        enable_parallelization=True, qr_package=QRPackage.SEGNO, verbose=True
+    )
+    pipeline = create_qr_video_encoding_pipeline(
+        serialize_function=None, deserialize_function=None, configuration=configuration
+    )
+
+    # Run pipeline.
+    pipeline.run_encode(input_data, DEMO_FILENAME)
+    output_data = pipeline.run_decode(DEMO_FILENAME)
+
+    # Showcase results.
+    print(f"Bytes read correctly: {len(output_data)} / {len(input_data)}")
+    print("Success!" if len(output_data) == len(input_data) else "Failure!")
+
+    # Write to output file.
+    output_file_name = "output." + file_name.split(".")[-1]
+    write_file_as_binary(output_data, output_file_name)
+
+    # (Optional) Remove output files.
+    remove_file(DEMO_FILENAME)
+    remove_file(output_file_name)
+
+
+def _qr_code_demo() -> None:
     """
     A prototype demo for QR code encoding and decoding.
     """
 
-    print("Running a QR encoding pipeline demo...\n")
-
-    # Create data.
+    # Get data.
     input_data = generate_random_string(CHUNK_SIZE * NUMBER_OF_FRAMES)
 
     # Build pipeline.
     configuration = QRVideoEncodingConfiguration(
-        show_decoding_window=True, chunk_size=CHUNK_SIZE
+        show_decoding_window=True, chunk_size=CHUNK_SIZE, verbose=True
     )
     pipeline = create_qr_video_encoding_pipeline(configuration=configuration)
 
     # Run pipeline.
-    print("Encoding...")
-    encode_duration = measure_task_performance(
-        lambda: pipeline.run_encode(input_data, DEMO_FILENAME)
-    )
-    print(f"Finished in {encode_duration:.4f} seconds.\n")
-
-    print("Decoding...")
-    output_data, decode_duration = measure_task_performance(
-        lambda: pipeline.run_decode(input_data, DEMO_FILENAME)
-    )
-    print(f"Finished in {decode_duration:.4f} seconds.\n")
+    pipeline.run_encode(input_data, DEMO_FILENAME)
+    output_data = pipeline.run_decode(DEMO_FILENAME)
 
     # Validate input / output.
     failed_qr_codes_readings = sum(
@@ -62,39 +82,4 @@ def _qr_code_demo():
 
 if __name__ == "__main__":
     # _qr_code_demo()
-
-    file_name = Path(open_file_dialog())
-
-    pipeline = create_qr_video_encoding_pipeline(
-        serialize_function=None,
-        deserialize_function=None,
-        configuration=QRVideoEncodingConfiguration(
-            error_correction=QRErrorCorrectLevels.ERROR_CORRECT_H,
-            enable_parallelization=False,
-        ),
-    )
-
-    print("--- Running QR encoding pipeline ---\n")
-
-    input = read_file_as_binary(Path(file_name))
-
-    # Run pipeline.
-    print("Encoding...")
-    encode_duration = measure_task_performance(
-        lambda: pipeline.run_encode(input, DEMO_FILENAME)
-    )
-    print(f"Finished encoding in {encode_duration:.4f} seconds.\n")
-
-    print("Decoding...\n")
-    output, decode_duration = measure_task_performance(
-        lambda: pipeline.run_decode(DEMO_FILENAME)
-    )
-    print(f"Finished decoding in {decode_duration:.4f} seconds.\n\n")
-
-    print(len(input) == len(output))
-
-    write_file_as_binary(output, Path("output.pdf"))
-
-    print(
-        f"Finished pipeline roundtrip after {encode_duration + decode_duration:.4f} seconds."
-    )
+    _qr_code_demo_manual()

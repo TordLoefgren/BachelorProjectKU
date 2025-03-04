@@ -5,7 +5,6 @@ A module containing utility functions that are used by other modules in the pack
 import base64
 import os
 import struct
-from pathlib import Path
 from random import choice, randbytes
 from string import ascii_uppercase
 from tkinter import filedialog
@@ -120,18 +119,18 @@ def generate_random_bytes(n: int) -> bytes:
 # region ----- Files -----
 
 
-def read_file_as_binary(file_path: Path) -> bytes:
+def read_file_as_binary(file_path: str) -> bytes:
     """
     Attempts to read the binary content of the given file path.
     """
-    if not file_path.exists():
+    if not os.path.exists(file_path):
         raise FileNotFoundError(f"{file_path} not found.")
 
     with open(file_path, mode="rb") as f:
         return f.read()
 
 
-def write_file_as_binary(data: bytes, file_path: Path) -> None:
+def write_file_as_binary(data: bytes, file_path: str) -> None:
     """
     Attempts to write the binary content of the given file path.
     """
@@ -140,7 +139,7 @@ def write_file_as_binary(data: bytes, file_path: Path) -> None:
         return f.write(data)
 
 
-def remove_file(file_path: Path) -> None:
+def remove_file(file_path: str) -> None:
     """
     Removes the file in the given file path if it exists.
     """
