@@ -1,19 +1,22 @@
-from src.enums import QRPackage
-from src.qr_codes import QRVideoEncodingConfiguration, create_qr_video_encoding_pipeline
+from src.base import PipelineValidationException
+from src.qr_configuration import QREncodingConfiguration
+from src.qr_pipeline import create_qr_video_encoding_pipeline
 from src.utils import (
-    generate_random_string,
+    from_bytes,
+    generate_random_ascii_string,
     open_file_dialog,
     read_file_as_binary,
     remove_file,
+    to_bytes,
     write_file_as_binary,
 )
 
-CHUNK_SIZE = 30
+CHUNK_SIZE = 1200
 NUMBER_OF_FRAMES = 240
 DEMO_FILENAME = "demo_video.mp4"
 
 
-def _qr_code_demo_manual() -> None:
+def _qr_code_demo_file() -> None:
     """
     A prototype demo for QR code encoding and decoding - choose file manually.
     """
@@ -23,28 +26,31 @@ def _qr_code_demo_manual() -> None:
     input_data = read_file_as_binary(file_name)
 
     # Build pipeline.
-    configuration = QRVideoEncodingConfiguration(
-        enable_parallelization=True, qr_package=QRPackage.SEGNO, verbose=True
+    configuration = QREncodingConfiguration(
+        enable_parallelization=True, verbose=True, validate=True
     )
     pipeline = create_qr_video_encoding_pipeline(
-        serialize_function=None, deserialize_function=None, configuration=configuration
+        serialize_function=None,
+        deserialize_function=None,
+        configuration=configuration,
+        validation_function=lambda input, output: len(input) == len(output),
     )
 
     # Run pipeline.
-    pipeline.run_encode(input_data, DEMO_FILENAME)
-    output_data = pipeline.run_decode(DEMO_FILENAME)
+    try:
+        output_data = pipeline.run(input_data, DEMO_FILENAME)
+    except PipelineValidationException as e:
+        print(f"Failure: {e}")
+    else:
+        print("Success!")
 
-    # Showcase results.
-    print(f"Bytes read correctly: {len(output_data)} / {len(input_data)}")
-    print("Success!" if len(output_data) == len(input_data) else "Failure!")
+        # Write to output file.
+        output_file_name = "output." + file_name.split(".")[-1]
+        write_file_as_binary(output_data, output_file_name)
 
-    # Write to output file.
-    output_file_name = "output." + file_name.split(".")[-1]
-    write_file_as_binary(output_data, output_file_name)
-
-    # (Optional) Remove output files.
-    remove_file(DEMO_FILENAME)
-    remove_file(output_file_name)
+        # (Optional) Remove output files.
+        remove_file(DEMO_FILENAME)
+        remove_file(output_file_name)
 
 
 def _qr_code_demo() -> None:
@@ -53,18 +59,23 @@ def _qr_code_demo() -> None:
     """
 
     # Get data.
-    input_data = generate_random_string(CHUNK_SIZE * NUMBER_OF_FRAMES)
+    input_data = generate_random_ascii_string(CHUNK_SIZE * NUMBER_OF_FRAMES)
 
     # Build pipeline.
-    configuration = QRVideoEncodingConfiguration(
-        show_decoding_window=True, chunk_size=CHUNK_SIZE, verbose=True
+    configuration = QREncodingConfiguration(
+        enable_parallelization=True,
+        chunk_size=CHUNK_SIZE,
+        show_decoding_window=True,
+        verbose=True,
     )
-    pipeline = create_qr_video_encoding_pipeline(configuration=configuration)
+    pipeline = create_qr_video_encoding_pipeline(
+        serialize_function=to_bytes,
+        deserialize_function=from_bytes,
+        configuration=configuration,
+    )
 
     # Run pipeline.
-    pipeline.run_encode(input_data, DEMO_FILENAME)
-    output_data = pipeline.run_decode(DEMO_FILENAME)
-
+    output_data = pipeline.run(input_data, DEMO_FILENAME)
     # Validate input / output.
     failed_qr_codes_readings = sum(
         1 for input in input_data if input not in output_data
@@ -81,5 +92,5 @@ def _qr_code_demo() -> None:
 
 
 if __name__ == "__main__":
-    # _qr_code_demo()
-    _qr_code_demo_manual()
+    _qr_code_demo()
+    # _qr_code_demo_file()

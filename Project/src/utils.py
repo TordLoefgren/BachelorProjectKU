@@ -97,7 +97,7 @@ def from_base64(data: str, decode_as_string: bool = False) -> Any:
 # region ----- Generate data -----
 
 
-def generate_random_string(n: int) -> str:
+def generate_random_ascii_string(n: int) -> str:
     """
     Generates a string of n random ascii uppercase characters.
     """
@@ -119,7 +119,7 @@ def generate_random_bytes(n: int) -> bytes:
 # region ----- Files -----
 
 
-def read_file_as_binary(file_path: str) -> bytes:
+def read_file_as_binary(file_path: str, size: Optional[int] = None) -> bytes:
     """
     Attempts to read the binary content of the given file path.
     """
@@ -127,7 +127,7 @@ def read_file_as_binary(file_path: str) -> bytes:
         raise FileNotFoundError(f"{file_path} not found.")
 
     with open(file_path, mode="rb") as f:
-        return f.read()
+        return f.read(size)
 
 
 def write_file_as_binary(data: bytes, file_path: str) -> None:

@@ -9,10 +9,14 @@ from typing import Any, Optional, Protocol, TypeVar
 
 from src.performance import measure_task_performance
 
-PROJECT_DIRECTORY = Path(__file__).parent
+PROJECT_DIRECTORY = Path(__file__).parent.parent
 UTF_8_ENCODING_STRING = "utf-8"
 
 T = TypeVar("T")
+
+
+class PipelineValidationException(Exception):
+    pass
 
 
 class SerializeFunction(Protocol):
@@ -33,17 +37,8 @@ class EncodingFunction(Protocol):
         self,
         serialized_data: bytes,
         video_file_path: str,
-        configuration: "VideoEncodingConfiguration",
+        configuration: "EncodingConfiguration",
     ) -> None:
-        pass
-
-
-class ProcessingFunction(Protocol):
-    """
-    Process the data in some way that emulates what a video service might do.
-    """
-
-    def __call__(self, data: bytes) -> bytes:
         pass
 
 
@@ -55,7 +50,7 @@ class DecodingFunction(Protocol):
     def __call__(
         self,
         video_file_path: str,
-        configuration: "VideoEncodingConfiguration",
+        configuration: "EncodingConfiguration",
     ) -> bytes:
         pass
 
@@ -69,13 +64,32 @@ class DeserializeFunction(Protocol):
         pass
 
 
+class ProcessingFunction(Protocol):
+    """
+    Process the data in some way that emulates what a video service might do.
+    """
+
+    def __call__(self, data: bytes) -> bytes:
+        pass
+
+
+class ValidationFunction(Protocol):
+    """
+    Validates the result of the pipeline run by comparing its input and output by a some metric.
+    """
+
+    def __call__(self, input: bytes, output: bytes) -> bool:
+        pass
+
+
 @dataclass
-class VideoEncodingConfiguration:
+class EncodingConfiguration:
     enable_parallelization: bool = False
     frames_per_second: int = 24
-    max_workers: Optional[int] = None
     show_decoding_window: bool = False
     verbose: bool = False
+    chunk_size: Optional[int] = None
+    max_workers: Optional[int] = None
 
 
 @dataclass
@@ -84,26 +98,25 @@ class VideoEncodingPipeline:
 
     encoding_function: EncodingFunction
     decoding_function: DecodingFunction
-    configuration: VideoEncodingConfiguration
+    configuration: EncodingConfiguration
     serialize_function: Optional[SerializeFunction] = None
     deserialize_function: Optional[DeserializeFunction] = None
     processing_function: Optional[ProcessingFunction] = None
+    validation_function: Optional[ValidationFunction] = None
 
     def run_encode(self, data: Any, video_file_path: str) -> None:
         """
         Runs the encoding part of the pipeline.
         """
 
-        if self.serialize_function:
+        if self.serialize_function is not None:
             data = self.serialize_function(data)
 
         if self.processing_function is not None:
-            # TODO: Add processing function.
-            # serialized_data = self.processing_function(serialized_data)
-            raise NotImplementedError("Processing function is not implemented.")
+            data = self.processing_function(data)
 
         if self.configuration.verbose:
-            print("\nEncoding...")
+            print(f"Encoding {len(data)} bytes...")
 
             duration = measure_task_performance(
                 partial(
@@ -111,7 +124,7 @@ class VideoEncodingPipeline:
                 )
             )
 
-            print(f"\nFinished encoding in {duration:.4f} seconds.")
+            print(f"\nEncoding finished in {duration:.4f} seconds.")
         else:
             self.encoding_function(data, video_file_path, self.configuration)
 
@@ -123,32 +136,41 @@ class VideoEncodingPipeline:
         if self.configuration.verbose:
             print("\nDecoding...")
 
-            data, duration = measure_task_performance(
+            result, duration = measure_task_performance(
                 partial(self.decoding_function, video_file_path, self.configuration)
             )
 
-            print(f"\nFinished decoding in {duration:.4f} seconds.\n")
+            print(f"\nDecoding finished in {duration:.4f} seconds.\n")
         else:
-            data = self.decoding_function(video_file_path, self.configuration)
+            result = self.decoding_function(video_file_path, self.configuration)
 
-        if self.deserialize_function:
-            data = self.deserialize_function(data)
+        if self.deserialize_function is not None:
+            result = self.deserialize_function(result)
 
-        return data
+        return result
 
-    def run_pipeline(self, data: T, video_file_path: str) -> T:
+    def run(self, data: T, video_file_path: str) -> T:
         """
         Runs the full pipeline, making a roundtrip.
         """
 
-        if self.configuration.verbose:
+        verbose = self.configuration.verbose
+
+        if verbose:
             print("--- Running QR encoding pipeline ---\n")
 
         self.run_encode(data, video_file_path)
 
-        data = self.run_decode(video_file_path)
+        result = self.run_decode(video_file_path)
 
-        if self.configuration.verbose:
+        if verbose:
             print("--- Finished QR encoding pipeline ---\n")
 
-        return data
+        if self.validation_function is not None and not self.validation_function(
+            data, result
+        ):
+            raise PipelineValidationException(
+                "The decoded data does not match the encoded data. "
+            )
+
+        return result
