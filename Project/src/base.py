@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Callable, List, Optional, Union
 
 from src.constants import T, TFrame, TSerialized
-from src.utils import bytes_to_display
+from src.utils import bytes_to_display, to_bytes
 
 
 class PipelineValidationException(Exception):
@@ -23,6 +23,20 @@ class EncodingConfiguration:
     max_workers: Optional[int] = None
 
 
+@dataclass
+class PipelineResult:
+    """
+    A dataclass that encapsulates the result of a pipeline run.
+    """
+
+    value: Optional[T] = None
+    exception: Optional[Exception] = None
+
+    @property
+    def is_valid(self):
+        return self.exception is None
+
+
 SerializeFunction = Callable[[T], TSerialized]
 DeserializeFunction = Callable[[TSerialized], T]
 
@@ -36,6 +50,10 @@ ValidateFunction = Callable[[T, T], bool]
 
 
 def validate_equal_sizes(input: T, output: T) -> bool:
+    """
+    A simple validation function that compares the lengths of input and output.
+    """
+
     return len(input) == len(output)
 
 
@@ -60,7 +78,7 @@ class VideoEncodingPipeline:
             data = self.serialize_function(data)
 
         if configuration.verbose:
-            print(f"Encoding {bytes_to_display(len(data))}...")
+            print("Encoding...")
 
         return self.encode_function(data, configuration)
 
@@ -107,22 +125,25 @@ class VideoEncodingPipeline:
 
     def run(
         self,
-        data: T,
+        input: T,
         file_path: str,
         configuration: EncodingConfiguration,
         mock: bool = False,
-    ) -> T:
+    ) -> PipelineResult:
         """
         Runs the full pipeline, making a roundtrip.
         """
 
         verbose = configuration.verbose
-
         if verbose:
+            print("│")
+            print(f"│ Input size: {bytes_to_display(len(to_bytes(input)))}")
+            print(f"│ Input type: {str(type(input))}")
+            print("│")
             print("└──── Running pipeline ────┐")
             print("                           │\n")
 
-        frames_in = self.run_encode(data, configuration)
+        frames_in = self.run_encode(input, configuration)
 
         if not mock:
             self.write_video_function(frames_in, file_path, configuration)
@@ -130,17 +151,29 @@ class VideoEncodingPipeline:
         else:
             frames_out = frames_in
 
-        result = self.run_decode(frames_out, configuration)
+        output = self.run_decode(frames_out, configuration)
+
+        result = PipelineResult(output)
 
         if verbose:
             print("\n                           │")
-            print("┌──── Finished pipeline ───┘\n")
+            print("┌──── Finished pipeline ───┘")
+            print("│")
+            print(f"│ Output size: {bytes_to_display(len(to_bytes(output)))}")
+            print(f"│ Output type: {str(type(output))}")
+            print("│")
 
-        if self.validate_function is not None and not self.validate_function(
-            data, result
-        ):
-            raise PipelineValidationException(
-                "The decoded data does not match the encoded data. "
-            )
+        if self.validate_function is not None:
+            is_valid = self.validate_function(input, output)
+
+            if verbose:
+                print(f"│ Validation: {"Success" if is_valid else "Failure"}\n")
+
+            if not is_valid:
+                return PipelineResult(
+                    exception=PipelineValidationException(
+                        "The decoded data does not match the encoded data. "
+                    )
+                )
 
         return result

@@ -60,13 +60,15 @@ class TestQRPipeline(TestCase):
         input_data = generate_random_ascii_string(STRING_DATA_LENGTH)
 
         # Act
-        output_data = self.pipeline_default.run(
+        result = self.pipeline_default.run(
             input_data, TEST_VIDEO_FILENAME, self.configuration_default
         )
 
         # Assert
+        self.assertIsNotNone(result.value)
+        self.assertIsNone(result.exception)
         self.assertTrue(os.path.exists(TEST_VIDEO_FILENAME))
-        self.assertEqual(input_data, output_data)
+        self.assertEqual(input_data, result.value)
 
     def tearDown(self):
         # Remove test file after use.

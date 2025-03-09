@@ -1,4 +1,4 @@
-from src.base import PipelineValidationException, validate_equal_sizes
+from src.base import validate_equal_sizes
 from src.qr_configuration import QREncodingConfiguration
 from src.qr_pipeline import create_qr_video_encoding_pipeline
 from src.utils import (
@@ -35,20 +35,19 @@ def _qr_code_demo_file() -> None:
     )
 
     # Run pipeline.
-    try:
-        output_data = pipeline.run(input_data, DEMO_FILENAME, configuration)
-    except PipelineValidationException as e:
-        print(f"Failure: {e}")
-    else:
-        print("Success!")
-
+    result = pipeline.run(input_data, DEMO_FILENAME, configuration, mock=True)
+    if result.is_valid:
         # Write to output file.
         output_file_name = "output." + get_file_extension(file_name)
-        write_file_as_binary(output_data, output_file_name)
+        write_file_as_binary(result.value, output_file_name)
 
-    # (Optional) Remove output files.
+        # Remove output file.
+        remove_file(output_file_name)
+    else:
+        print(result.exception)
+
+    # Remove video file after use.
     remove_file(DEMO_FILENAME)
-    remove_file(output_file_name)
 
 
 def _qr_code_demo() -> None:
@@ -68,23 +67,15 @@ def _qr_code_demo() -> None:
     pipeline = create_qr_video_encoding_pipeline(
         serialize_function=to_bytes,
         deserialize_function=from_bytes,
+        validate_function=validate_equal_sizes,
     )
 
     # Run pipeline.
-    output_data = pipeline.run(input_data, DEMO_FILENAME, configuration)
+    result = pipeline.run(input_data, DEMO_FILENAME, configuration)
+    if not result.is_valid:
+        print(result.exception)
 
-    # Validate input / output.
-    failed_qr_codes_readings = sum(
-        1 for input in input_data if input not in output_data
-    )
-
-    # Showcase results.
-    print(
-        f"QR codes read correctly: {NUMBER_OF_FRAMES - failed_qr_codes_readings} / {NUMBER_OF_FRAMES}"
-    )
-    print("Success!" if failed_qr_codes_readings == 0 else "Failure!")
-
-    # Remove demo video file after use.
+    # Remove video file after use.
     remove_file(DEMO_FILENAME)
 
 
