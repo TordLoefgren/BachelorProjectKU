@@ -2,15 +2,19 @@
 A module that contains functions for video processing.
 """
 
+import time
 from dataclasses import dataclass
-from typing import List, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import cv2
+import dxcam
 import numpy as np
 from cv2.typing import MatLike
 from PIL.Image import Image, fromarray
 from qrcode.image.base import BaseImage
 from rectpack import newPacker
+from src.base import EncodingConfiguration
+from src.constants import BGR, MP4V, RGB
 
 
 @dataclass
@@ -21,9 +25,7 @@ class GridLayout:
 
 
 def create_video_from_frames(
-    frames: List[MatLike],
-    file_path: str,
-    frames_per_second: int = 24,
+    frames: List[MatLike], file_path: str, configuration: EncodingConfiguration
 ) -> None:
     """
     Create a video from a list of image frames.
@@ -39,9 +41,9 @@ def create_video_from_frames(
     reference_frame = frames[0]
     height, width = reference_frame.shape[:2]
 
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    fourcc = cv2.VideoWriter_fourcc(*MP4V)
     video_writer = cv2.VideoWriter(
-        file_path, fourcc, frames_per_second, (width, height)
+        file_path, fourcc, configuration.frames_per_second, (width, height)
     )
 
     for frame in frames:
@@ -56,7 +58,7 @@ def create_video_from_frames(
 
 def create_frames_from_video(
     file_path: str,
-    show_window: bool = False,
+    configuration: EncodingConfiguration,
 ) -> List[MatLike]:
     """
     Captures a video and returns all the frames.
@@ -65,7 +67,6 @@ def create_frames_from_video(
     https://stackoverflow.com/questions/18954889/how-to-process-images-of-a-video-frame-by-frame-in-video-streaming-using-openc
     """
 
-    # TODO: Returning all frames is very neat, but maybe not the most performant solution. Reconsider.
     frames = []
     capture = cv2.VideoCapture(file_path)
 
@@ -74,18 +75,79 @@ def create_frames_from_video(
         if not ret:
             break
 
-        if show_window:
+        if configuration.show_decoding_window:
             cv2.imshow(f"Reading '{file_path}'", frame)
 
-        if show_window and cv2.waitKey(10) & 0xFF == ord("q"):
+        if configuration.show_decoding_window and cv2.waitKey(10) & 0xFF == ord("q"):
             break
 
         frames.append(frame)
 
     capture.release()
 
-    if show_window:
+    if configuration.show_decoding_window:
         cv2.destroyAllWindows()
+
+    return frames
+
+
+def create_frames_from_capture(
+    configuration: EncodingConfiguration,
+    duration_seconds: int,
+    region: Optional[tuple[int, int, int, int]] = None,
+) -> List[MatLike]:
+    """
+    Captures the screen and returns the frames.
+
+    Utilizes the high FPS video capture package 'dxcam': https://github.com/ra1nty/DXcam
+
+    FPS manager inspiration from:
+
+    https://www.youtube.com/watch?v=Y-DyOdjLif4
+    """
+
+    camera = dxcam.create(output_color=BGR)
+    camera.start(
+        target_fps=configuration.frames_per_second, video_mode=True, region=region
+    )
+
+    prev_time = 0
+    fps_display_delay = 0
+    fps_delayed = 0
+    fps_list = [0.0] * 10
+
+    frames: List[MatLike] = []
+
+    stop = time.time() + duration_seconds
+    while time.time() < stop:
+        frame = camera.get_latest_frame()
+
+        if configuration.verbose:
+            # Calculate the FPS
+            curr_time = time.perf_counter()
+            fps = 1 / (curr_time - prev_time)
+            prev_time = curr_time
+
+            # Add current FPS to a list and remove last element.
+            fps_list.append(fps)
+            fps_list.pop(0)
+
+            # Get the average FPS using the last 10 frames.
+            avg_fps = sum(fps_list) / len(fps_list)
+
+            fps_display_delay += 1
+
+            if fps_display_delay >= 3:
+                fps_delayed = avg_fps
+                fps_display_delay = 0
+
+            print(f"FPS: {fps_delayed: .0f}")
+
+        frames.append(frame)
+
+    # Release resources.
+    camera.stop()
+    del camera
 
     return frames
 
@@ -134,7 +196,7 @@ def pil_to_cv2(image: Union[BaseImage, Image]) -> MatLike:
     """
 
     if isinstance(image, (BaseImage, Image)):
-        rgb_image = image.convert("RGB")
+        rgb_image = image.convert(RGB)
     else:
         raise TypeError(f"Unsupported data type: {type(image)}")
 

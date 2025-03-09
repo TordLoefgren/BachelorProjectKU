@@ -6,11 +6,10 @@ import cProfile
 import pstats
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from time import perf_counter
-from typing import Callable, Iterable, List, Optional, Tuple, TypeVar, overload
+from typing import Callable, Iterable, List, Optional, Tuple, overload
 
+from src.constants import TQDM_BAR_COLOUR_GREEN, TQDM_BAR_FORMAT_STRING, T
 from tqdm import tqdm
-
-T = TypeVar("T")
 
 
 @overload
@@ -76,12 +75,12 @@ def measure_task_performance(task: Callable[..., T]):
 
 def execute_parallel_tasks(
     tasks: Iterable[Callable[..., T]],
-    max_workers: Optional[int] = None,
     verbose: bool = False,
     description: str = "Processing",
+    max_workers: Optional[int] = None,
 ) -> List[T]:
     """
-    A function that executes iterable tasks in parallel and returns the results as a list.
+    A function that executes iterable tasks in parallel and returns the results in a list.
     """
 
     results: List[T] = []
@@ -90,11 +89,14 @@ def execute_parallel_tasks(
         futures = {
             i: executor.submit(_execute_task, task) for i, task in enumerate(tasks)
         }
+
         for future in tqdm(
             as_completed(futures.values()),
             total=len(futures),
             desc=description,
             disable=not verbose,
+            bar_format=TQDM_BAR_FORMAT_STRING,
+            colour=TQDM_BAR_COLOUR_GREEN,
         ):
             results.append(future.result())
 

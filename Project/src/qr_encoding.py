@@ -5,22 +5,33 @@ A module that contains functions for encoding QR codes.
 import io
 import math
 from functools import partial
-from typing import List, Tuple
+from typing import List
 
 import qrcode
 import segno
 from cv2.typing import MatLike
 from PIL import Image
 from qrcode.util import MODE_8BIT_BYTE, QRData
+from src.constants import MAX_SIZE, RGB, TQDM_BAR_COLOUR_GREEN, TQDM_BAR_FORMAT_STRING
 from src.enums import QRErrorCorrectionLevel, QRPackage
 from src.performance import execute_parallel_tasks
 from src.qr_configuration import QREncodingConfiguration
+from src.utils import bytes_to_display
 from src.video_processing import GridLayout, get_grid_layout, pil_to_cv2
 from tqdm import tqdm
 
-# TODO: The max size should be determined dynamically or through the configuration.
-# We set a large max size in order to experiment with multi-QR code frames.
-MAX_SIZE: Tuple[int, int] = (4000, 4000)
+
+def encode_data_to_frames(
+    data: bytes, configuration: QREncodingConfiguration
+) -> List[MatLike]:
+    """
+    Generates a sequence of QR code images from the given data and creates frames from these images.
+    """
+
+    images = generate_qr_images(data, configuration)
+    frames = generate_image_frames(images, configuration)
+
+    return frames
 
 
 def generate_qr_images(
@@ -52,6 +63,8 @@ def generate_qr_images(
             range(0, len(data), max_bytes),
             desc="Generating QR code images",
             disable=not configuration.verbose,
+            bar_format=TQDM_BAR_FORMAT_STRING,
+            colour=TQDM_BAR_COLOUR_GREEN,
         ):
             image = _generate_qr_image(data[i : i + max_bytes], configuration)
             images.append(image)
@@ -70,12 +83,6 @@ def generate_image_frames(
 
     # If the list contains a single image, or if every frame contains a single image each, we simply return the list.
     if configuration.qr_codes_per_frame == 1 or len(images) == 1:
-        for i in tqdm(
-            range(0, len(images)),
-            desc="Generating QR code frames",
-            disable=not configuration.verbose,
-        ):
-            pass
         return images
 
     # If more than one QR code is shown per frame, we need to generate a new combined image for every frame.
@@ -118,7 +125,7 @@ def _generate_qr_image(data: bytes, configuration: QREncodingConfiguration) -> M
 
     if len(data) > max_bytes:
         raise ValueError(
-            f"Data size is {len(data)} bytes. The maximum allowed size for a QR code is {max_bytes} bytes."
+            f"Data size is {bytes_to_display(len(data))}. The maximum allowed size for a QR code is {bytes_to_display(max_bytes)}."
         )
 
     image = None
@@ -149,7 +156,7 @@ def _generate_qr_image(data: bytes, configuration: QREncodingConfiguration) -> M
         qr.save(out=out, scale=5, kind="png", border=10)
         out.seek(0)
 
-        image = Image.open(out).convert("RGB")
+        image = Image.open(out).convert(RGB)
 
     else:
         raise ValueError(f"Unexpected value: {type(configuration.qr_package)}.")
@@ -167,7 +174,7 @@ def _generate_image_frame(
 
     # TODO: Have this function use MatLike and not Image.
 
-    frame = Image.new("RGB", layout.size)
+    frame = Image.new(RGB, layout.size)
 
     for i in range(len(images)):
         # We follow the indices set during the layout initialization.

@@ -5,18 +5,16 @@ A module containing utility functions that are used by other modules in the pack
 import base64
 import os
 import struct
+from pathlib import Path
 from random import choice, randbytes
 from string import ascii_uppercase
 from tkinter import filedialog
-from typing import Any, Optional, Type, Union
+from typing import Any, Optional, Type
 
 import numpy as np
-from src.base import PROJECT_DIRECTORY, UTF_8_ENCODING_STRING
+from src.constants import ALLOWED_TYPES, PROJECT_DIRECTORY, UTF_8_ENCODING_STRING
 
 # region ----- Serialization -----
-
-
-ALLOWED_TYPES = Union[bytes, float, int, str, np.ndarray]
 
 
 def to_bytes(data: ALLOWED_TYPES) -> bytes:
@@ -148,6 +146,18 @@ def remove_file(file_path: str) -> None:
         os.remove(file_path)
 
 
+def get_file_extension(file_path: str) -> str:
+    """
+    Returns the file extension from the file at the given path.
+
+    Inspiration from:
+
+    https://www.geeksforgeeks.org/how-to-get-file-extension-in-python/
+    """
+
+    return Path(file_path).suffix
+
+
 def open_file_dialog() -> str:
     """
     Opens a file dialog and returns the selected file path.
@@ -162,6 +172,28 @@ def open_file_dialog() -> str:
     """
 
     return filedialog.askopenfilename(initialdir=PROJECT_DIRECTORY)
+
+
+# endregion
+
+
+# region ----- Miscellaneous -----
+
+
+def bytes_to_display(num_bytes: int, factor: int = 1024) -> str:
+    """
+    Inspiration from:
+    https://stackoverflow.com/questions/1094841/get-a-human-readable-version-of-a-file-size
+    """
+
+    units = ["B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"]
+
+    for unit in units:
+        if num_bytes < factor:
+            return f"{num_bytes:.2f} {unit}"
+        num_bytes /= factor
+
+    return f"{num_bytes:.2f} YB"
 
 
 # endregion

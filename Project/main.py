@@ -1,9 +1,10 @@
-from src.base import PipelineValidationException
+from src.base import PipelineValidationException, validate_equal_size
 from src.qr_configuration import QREncodingConfiguration
 from src.qr_pipeline import create_qr_video_encoding_pipeline
 from src.utils import (
     from_bytes,
     generate_random_ascii_string,
+    get_file_extension,
     open_file_dialog,
     read_file_as_binary,
     remove_file,
@@ -26,31 +27,28 @@ def _qr_code_demo_file() -> None:
     input_data = read_file_as_binary(file_name)
 
     # Build pipeline.
-    configuration = QREncodingConfiguration(
-        enable_parallelization=True, verbose=True, validate=True
-    )
+    configuration = QREncodingConfiguration(enable_parallelization=True, verbose=True)
     pipeline = create_qr_video_encoding_pipeline(
         serialize_function=None,
         deserialize_function=None,
-        configuration=configuration,
-        validation_function=lambda input, output: len(input) == len(output),
+        validation_function=validate_equal_size,
     )
 
     # Run pipeline.
     try:
-        output_data = pipeline.run(input_data, DEMO_FILENAME)
+        output_data = pipeline.run(input_data, DEMO_FILENAME, configuration)
     except PipelineValidationException as e:
         print(f"Failure: {e}")
     else:
         print("Success!")
 
         # Write to output file.
-        output_file_name = "output." + file_name.split(".")[-1]
+        output_file_name = "output." + get_file_extension(file_name)
         write_file_as_binary(output_data, output_file_name)
 
-        # (Optional) Remove output files.
-        remove_file(DEMO_FILENAME)
-        remove_file(output_file_name)
+    # (Optional) Remove output files.
+    remove_file(DEMO_FILENAME)
+    remove_file(output_file_name)
 
 
 def _qr_code_demo() -> None:
@@ -71,11 +69,10 @@ def _qr_code_demo() -> None:
     pipeline = create_qr_video_encoding_pipeline(
         serialize_function=to_bytes,
         deserialize_function=from_bytes,
-        configuration=configuration,
     )
 
     # Run pipeline.
-    output_data = pipeline.run(input_data, DEMO_FILENAME)
+    output_data = pipeline.run(input_data, DEMO_FILENAME, configuration)
     # Validate input / output.
     failed_qr_codes_readings = sum(
         1 for input in input_data if input not in output_data
