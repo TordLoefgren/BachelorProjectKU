@@ -81,12 +81,14 @@ def from_base64(data: str, decode_as_string: bool = False) -> Any:
     If the decoded data is expected to be a string, we first 'utf-8' decode the the data.
     """
 
+    # TODO: Figure out cleaner way to handle string encoding. Right now we need to use it as a partial function in the pipeline.
+
     decoded_bytes = base64.b64decode(data)
 
     if decode_as_string:
         return decoded_bytes.decode(UTF_8_ENCODING_STRING)
     else:
-        return from_bytes(decoded_bytes)
+        return from_bytes(decoded_bytes, str() if decode_as_string else bytes())
 
 
 # endregion

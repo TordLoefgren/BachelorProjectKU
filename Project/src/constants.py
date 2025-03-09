@@ -6,14 +6,16 @@ from pathlib import Path
 from typing import Tuple, TypeVar, Union
 
 import numpy as np
+from cv2.typing import MatLike as _matlike
 
 # region ----- types -----
 
 
 ALLOWED_TYPES = Union[bytes, float, int, str, np.ndarray]
+MatLike = _matlike
 T = TypeVar("T")
-TFrames = TypeVar("TFrames")
-
+TSerialized = TypeVar("TSerialized")
+TFrame = TypeVar("TFrame")
 
 # endregion
 

@@ -1,7 +1,7 @@
 import os
 from unittest import TestCase
 
-from src.constants import PROJECT_DIRECTORY
+from src.constants import PROJECT_DIRECTORY, MatLike
 from src.qr_configuration import QREncodingConfiguration
 from src.qr_pipeline import create_qr_video_encoding_pipeline
 from src.utils import from_bytes, generate_random_ascii_string, remove_file, to_bytes
@@ -22,42 +22,47 @@ class TestQRPipeline(TestCase):
         pass
 
     def setUp(self) -> None:
-        self.pipeline = create_qr_video_encoding_pipeline(
+        self.pipeline_default = create_qr_video_encoding_pipeline(
             serialize_function=to_bytes,
             deserialize_function=from_bytes,
         )
+        self.configuration_default = QREncodingConfiguration()
 
-    def test__run_encode__should__create_video_file(self) -> None:
+    def test__run_encode__should__return_frames(self) -> None:
         # Arrange
         input_data = generate_random_ascii_string(STRING_DATA_LENGTH)
-        configuration = QREncodingConfiguration()
 
         # Act
-        self.pipeline.run_encode(input_data, TEST_VIDEO_FILENAME, configuration)
+        frames = self.pipeline_default.run_encode(
+            input_data, self.configuration_default
+        )
 
         # Assert
-        self.assertTrue(os.path.exists(TEST_VIDEO_FILENAME))
+        self.assertIsInstance(frames[0], MatLike)
 
-    def test__run_decode__should__return_data_from_video_file(self) -> None:
+    def test__run_decode__should__return_data_from_frames(self) -> None:
         # Arrange
         input_data = generate_random_ascii_string(STRING_DATA_LENGTH)
-        configuration = QREncodingConfiguration()
-        self.pipeline.run_encode(input_data, TEST_VIDEO_FILENAME, configuration)
+        frames = self.pipeline_default.run_encode(
+            input_data, self.configuration_default
+        )
 
         # Act
-        output_data = self.pipeline.run_decode(TEST_VIDEO_FILENAME, configuration)
+        output_data = self.pipeline_default.run_decode(
+            frames, self.configuration_default
+        )
 
         # Assert
-        self.assertTrue(os.path.exists(TEST_VIDEO_FILENAME))
         self.assertEqual(input_data, output_data)
 
     def test__run_pipeline__should__encode_video_and_return_data(self) -> None:
         # Arrange
         input_data = generate_random_ascii_string(STRING_DATA_LENGTH)
-        configuration = QREncodingConfiguration()
 
         # Act
-        output_data = self.pipeline.run(input_data, TEST_VIDEO_FILENAME, configuration)
+        output_data = self.pipeline_default.run(
+            input_data, TEST_VIDEO_FILENAME, self.configuration_default
+        )
 
         # Assert
         self.assertTrue(os.path.exists(TEST_VIDEO_FILENAME))

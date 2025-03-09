@@ -9,10 +9,15 @@ from typing import List
 
 import qrcode
 import segno
-from cv2.typing import MatLike
 from PIL import Image
 from qrcode.util import MODE_8BIT_BYTE, QRData
-from src.constants import MAX_SIZE, RGB, TQDM_BAR_COLOUR_GREEN, TQDM_BAR_FORMAT_STRING
+from src.constants import (
+    MAX_SIZE,
+    RGB,
+    TQDM_BAR_COLOUR_GREEN,
+    TQDM_BAR_FORMAT_STRING,
+    MatLike,
+)
 from src.enums import QRErrorCorrectionLevel, QRPackage
 from src.performance import execute_parallel_tasks
 from src.qr_configuration import QREncodingConfiguration

@@ -9,12 +9,11 @@ from typing import List, Optional, Tuple, Union
 import cv2
 import dxcam
 import numpy as np
-from cv2.typing import MatLike
 from PIL.Image import Image, fromarray
 from qrcode.image.base import BaseImage
 from rectpack import newPacker
 from src.base import EncodingConfiguration
-from src.constants import BGR, MP4V, RGB
+from src.constants import BGR, MP4V, RGB, MatLike
 
 
 @dataclass

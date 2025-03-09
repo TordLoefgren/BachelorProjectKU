@@ -5,9 +5,8 @@ A module that contains functions for decoding QR codes.
 from functools import partial
 from typing import List
 
-from cv2.typing import MatLike
 from pyzbar.pyzbar import ZBarSymbol, decode
-from src.constants import TQDM_BAR_COLOUR_GREEN, TQDM_BAR_FORMAT_STRING
+from src.constants import TQDM_BAR_COLOUR_GREEN, TQDM_BAR_FORMAT_STRING, MatLike
 from src.performance import execute_parallel_tasks
 from src.qr_configuration import QREncodingConfiguration
 from tqdm import tqdm
