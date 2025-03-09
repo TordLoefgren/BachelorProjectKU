@@ -15,7 +15,7 @@ class PipelineValidationException(Exception):
 
 @dataclass
 class EncodingConfiguration:
-    enable_parallelization: bool = False
+    enable_parallelization: bool = True
     frames_per_second: int = 24
     show_decoding_window: bool = False
     verbose: bool = False
@@ -32,10 +32,10 @@ DecodeFunction = Callable[[TFrames, EncodingConfiguration], bytes]
 WriteVideoFunction = Callable[[TFrames, str, EncodingConfiguration], None]
 ReadVideoFunction = Callable[[str, EncodingConfiguration], TFrames]
 
-ValidateFunction = Callable[[bytes, bytes], bool]
+ValidateFunction = Callable[[T, T], bool]
 
 
-def validate_equal_size(input: bytes, output: bytes) -> bool:
+def validate_equal_sizes(input: T, output: T) -> bool:
     return len(input) == len(output)
 
 

@@ -76,6 +76,7 @@ def create_frames_from_video(
             break
 
         if configuration.show_decoding_window:
+            # TODO: See if there is a way to avoid having the window block operations.
             cv2.imshow(f"Reading '{file_path}'", frame)
 
         if configuration.show_decoding_window and cv2.waitKey(10) & 0xFF == ord("q"):

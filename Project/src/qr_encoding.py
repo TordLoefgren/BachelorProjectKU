@@ -20,6 +20,8 @@ from src.utils import bytes_to_display
 from src.video_processing import GridLayout, get_grid_layout, pil_to_cv2
 from tqdm import tqdm
 
+GENERATING_IMAGES_STRING = "Generating QR code images"
+
 
 def encode_data_to_frames(
     data: bytes, configuration: QREncodingConfiguration
@@ -54,14 +56,14 @@ def generate_qr_images(
             ),
             max_workers=configuration.max_workers,
             verbose=configuration.verbose,
-            description="Generating QR code images",
+            description=GENERATING_IMAGES_STRING,
         )
     else:
         images: List[MatLike] = []
 
         for i in tqdm(
             range(0, len(data), max_bytes),
-            desc="Generating QR code images",
+            desc=GENERATING_IMAGES_STRING,
             disable=not configuration.verbose,
             bar_format=TQDM_BAR_FORMAT_STRING,
             colour=TQDM_BAR_COLOUR_GREEN,

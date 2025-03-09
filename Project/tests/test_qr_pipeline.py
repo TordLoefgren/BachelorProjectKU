@@ -1,7 +1,8 @@
 import os
 from unittest import TestCase
 
-from src.base import PROJECT_DIRECTORY
+from src.constants import PROJECT_DIRECTORY
+from src.qr_configuration import QREncodingConfiguration
 from src.qr_pipeline import create_qr_video_encoding_pipeline
 from src.utils import from_bytes, generate_random_ascii_string, remove_file, to_bytes
 
@@ -29,9 +30,10 @@ class TestQRPipeline(TestCase):
     def test__run_encode__should__create_video_file(self) -> None:
         # Arrange
         input_data = generate_random_ascii_string(STRING_DATA_LENGTH)
+        configuration = QREncodingConfiguration()
 
         # Act
-        self.pipeline.run_encode(input_data, TEST_VIDEO_FILENAME)
+        self.pipeline.run_encode(input_data, TEST_VIDEO_FILENAME, configuration)
 
         # Assert
         self.assertTrue(os.path.exists(TEST_VIDEO_FILENAME))
@@ -39,10 +41,11 @@ class TestQRPipeline(TestCase):
     def test__run_decode__should__return_data_from_video_file(self) -> None:
         # Arrange
         input_data = generate_random_ascii_string(STRING_DATA_LENGTH)
-        self.pipeline.run_encode(input_data, TEST_VIDEO_FILENAME)
+        configuration = QREncodingConfiguration()
+        self.pipeline.run_encode(input_data, TEST_VIDEO_FILENAME, configuration)
 
         # Act
-        output_data = self.pipeline.run_decode(TEST_VIDEO_FILENAME)
+        output_data = self.pipeline.run_decode(TEST_VIDEO_FILENAME, configuration)
 
         # Assert
         self.assertTrue(os.path.exists(TEST_VIDEO_FILENAME))
@@ -51,9 +54,10 @@ class TestQRPipeline(TestCase):
     def test__run_pipeline__should__encode_video_and_return_data(self) -> None:
         # Arrange
         input_data = generate_random_ascii_string(STRING_DATA_LENGTH)
+        configuration = QREncodingConfiguration()
 
         # Act
-        output_data = self.pipeline.run(input_data, TEST_VIDEO_FILENAME)
+        output_data = self.pipeline.run(input_data, TEST_VIDEO_FILENAME, configuration)
 
         # Assert
         self.assertTrue(os.path.exists(TEST_VIDEO_FILENAME))

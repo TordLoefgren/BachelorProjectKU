@@ -1,4 +1,4 @@
-from src.base import PipelineValidationException, validate_equal_size
+from src.base import PipelineValidationException, validate_equal_sizes
 from src.qr_configuration import QREncodingConfiguration
 from src.qr_pipeline import create_qr_video_encoding_pipeline
 from src.utils import (
@@ -27,11 +27,11 @@ def _qr_code_demo_file() -> None:
     input_data = read_file_as_binary(file_name)
 
     # Build pipeline.
-    configuration = QREncodingConfiguration(enable_parallelization=True, verbose=True)
+    configuration = QREncodingConfiguration(verbose=True)
     pipeline = create_qr_video_encoding_pipeline(
         serialize_function=None,
         deserialize_function=None,
-        validation_function=validate_equal_size,
+        validate_function=validate_equal_sizes,
     )
 
     # Run pipeline.
@@ -61,7 +61,6 @@ def _qr_code_demo() -> None:
 
     # Build pipeline.
     configuration = QREncodingConfiguration(
-        enable_parallelization=True,
         chunk_size=CHUNK_SIZE,
         show_decoding_window=True,
         verbose=True,
@@ -73,6 +72,7 @@ def _qr_code_demo() -> None:
 
     # Run pipeline.
     output_data = pipeline.run(input_data, DEMO_FILENAME, configuration)
+
     # Validate input / output.
     failed_qr_codes_readings = sum(
         1 for input in input_data if input not in output_data

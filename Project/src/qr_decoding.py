@@ -7,8 +7,12 @@ from typing import List
 
 from cv2.typing import MatLike
 from pyzbar.pyzbar import ZBarSymbol, decode
+from src.constants import TQDM_BAR_COLOUR_GREEN, TQDM_BAR_FORMAT_STRING
 from src.performance import execute_parallel_tasks
 from src.qr_configuration import QREncodingConfiguration
+from tqdm import tqdm
+
+DECODING_STRING = "Decoding QR code frames"
 
 
 def decode_frames_to_data(
@@ -28,13 +32,19 @@ def decode_frames_to_data(
             tasks=(partial(_decode_qr_image, frame) for frame in frames),
             max_workers=configuration.max_workers,
             verbose=configuration.verbose,
-            description="Decoding QR code frames",
+            description=DECODING_STRING,
         )
         for result in results:
             decoded_frames.extend(result)
     else:
-        for frame in frames:
-            decoded_frames.extend(_decode_qr_image(frame))
+        for i in tqdm(
+            range(0, len(frames)),
+            desc=DECODING_STRING,
+            disable=not configuration.verbose,
+            bar_format=TQDM_BAR_FORMAT_STRING,
+            colour=TQDM_BAR_COLOUR_GREEN,
+        ):
+            decoded_frames.extend(_decode_qr_image(frames[i]))
 
     return bytes(decoded_frames)
 
