@@ -1,14 +1,11 @@
-from src.base import validate_equal_sizes
 from src.qr_configuration import QREncodingConfiguration
 from src.qr_pipeline import create_qr_video_encoding_pipeline
 from src.utils import (
-    from_bytes,
-    generate_random_ascii_string,
+    generate_random_bytes,
     get_file_extension,
     open_file_dialog,
     read_file_as_binary,
     remove_file,
-    to_bytes,
     write_file_as_binary,
 )
 
@@ -28,14 +25,10 @@ def _qr_code_demo_file() -> None:
 
     # Build pipeline.
     configuration = QREncodingConfiguration(verbose=True)
-    pipeline = create_qr_video_encoding_pipeline(
-        serialize_function=None,
-        deserialize_function=None,
-        validate_function=validate_equal_sizes,
-    )
+    pipeline = create_qr_video_encoding_pipeline()
 
     # Run pipeline.
-    result = pipeline.run(input_data, DEMO_FILENAME, configuration, mock=True)
+    result = pipeline.run(input_data, DEMO_FILENAME, configuration, mock=False)
     if result.is_valid:
         # Write to output file.
         output_file_name = "output." + get_file_extension(file_name)
@@ -56,7 +49,7 @@ def _qr_code_demo() -> None:
     """
 
     # Get data.
-    input_data = generate_random_ascii_string(CHUNK_SIZE * NUMBER_OF_FRAMES)
+    input_data = generate_random_bytes(CHUNK_SIZE * NUMBER_OF_FRAMES)
 
     # Build pipeline.
     configuration = QREncodingConfiguration(
@@ -64,14 +57,10 @@ def _qr_code_demo() -> None:
         show_decoding_window=True,
         verbose=True,
     )
-    pipeline = create_qr_video_encoding_pipeline(
-        serialize_function=to_bytes,
-        deserialize_function=from_bytes,
-        validate_function=validate_equal_sizes,
-    )
+    pipeline = create_qr_video_encoding_pipeline()
 
     # Run pipeline.
-    result = pipeline.run(input_data, DEMO_FILENAME, configuration)
+    result = pipeline.run(input_data, DEMO_FILENAME, configuration, mock=True)
     if not result.is_valid:
         print(result.exception)
 

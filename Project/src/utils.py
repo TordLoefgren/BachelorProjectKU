@@ -2,97 +2,15 @@
 A module containing utility functions that are used by other modules in the package.
 """
 
-import base64
 import os
-import struct
 from pathlib import Path
 from random import choice, randbytes
 from string import ascii_uppercase
 from tkinter import filedialog
-from typing import Any, Optional, Type
+from typing import Optional, Tuple
 
-import numpy as np
-from src.constants import ALLOWED_TYPES, PROJECT_DIRECTORY, UTF_8_ENCODING_STRING
-
-# region ----- Serialization -----
-
-
-def to_bytes(data: ALLOWED_TYPES) -> bytes:
-    """
-    Returns the byte representation of the given data.
-    """
-
-    match data:
-        case bytes():
-            return data
-        case str():
-            return data.encode(UTF_8_ENCODING_STRING)
-        case int() | float():
-            return struct.pack("d", data)
-        case np.ndarray():
-            return data.tobytes()
-        case _:
-            raise TypeError(f"Unsupported data type: {type(data)}.")
-
-
-def from_bytes(data: bytes, data_type: Optional[Type[ALLOWED_TYPES]] = None) -> Any:
-    """
-    Returns the data represented by the bytes.
-    """
-
-    if not isinstance(data, bytes):
-        raise TypeError(f"Unsupported data type: {type(data)}")
-
-    if data_type is None:
-        data_type = str()
-
-    match data_type:
-        case bytes():
-            return data
-        case str():
-            return data.decode(UTF_8_ENCODING_STRING)
-        case int() | float():
-            return struct.unpack("d", data)
-        case np.ndarray:
-            return np.frombuffer(data)
-        case _:
-            raise TypeError(f"Unsupported data type: {type(data)}")
-
-
-def to_base64(data: Any) -> str:
-    """
-    Base64-encodes the given data.
-
-    If the data is not in bytes, we first convert it to bytes.
-    """
-
-    if not isinstance(data, bytes):
-        data = to_bytes(data)
-
-    encoded_data = base64.b64encode(data)
-
-    return encoded_data.decode(UTF_8_ENCODING_STRING)
-
-
-def from_base64(data: str, decode_as_string: bool = False) -> Any:
-    """
-    Base64-decodes the given data.
-
-    If the decoded data is expected to be a string, we first 'utf-8' decode the the data.
-    """
-
-    # TODO: Figure out cleaner way to handle string encoding. Right now we need to use it as a partial function in the pipeline.
-
-    decoded_bytes = base64.b64decode(data)
-
-    if decode_as_string:
-        return decoded_bytes.decode(UTF_8_ENCODING_STRING)
-    else:
-        return from_bytes(decoded_bytes, str() if decode_as_string else bytes())
-
-
-# endregion
-
+import psutil
+from src.constants import PROJECT_DIRECTORY
 
 # region ----- Generate data -----
 
@@ -196,6 +114,20 @@ def bytes_to_display(num_bytes: int, factor: int = 1024) -> str:
         num_bytes /= factor
 
     return f"{num_bytes:.2f} YB"
+
+
+def get_core_specifications() -> Tuple[int, int]:
+    """
+    Gets the number of logical and physical cores from the executing PC.
+
+    Inspiration from:
+    https://stackoverflow.com/questions/1006289/how-to-find-out-the-number-of-cpus-using-python
+    """
+
+    physical_cores = psutil.cpu_count(logical=False)
+    logical_cores = os.cpu_count()
+
+    return physical_cores, logical_cores
 
 
 # endregion

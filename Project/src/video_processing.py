@@ -4,6 +4,7 @@ A module that contains functions for video processing.
 
 import time
 from dataclasses import dataclass
+from functools import partial
 from typing import List, Optional, Tuple, Union
 
 import cv2
@@ -12,8 +13,17 @@ import numpy as np
 from PIL.Image import Image, fromarray
 from qrcode.image.base import BaseImage
 from rectpack import newPacker
-from src.base import EncodingConfiguration
-from src.constants import BGR, MP4V, RGB, MatLike
+from src.base import EncodingConfiguration, VideoHandler
+from src.constants import (
+    BGR,
+    MP4V,
+    RGB,
+    TQDM_BAR_COLOUR_GREEN,
+    TQDM_BAR_FORMAT,
+    MatLike,
+)
+from src.performance import execute_parallel_tasks
+from tqdm import tqdm
 
 
 @dataclass
@@ -45,12 +55,30 @@ def create_video_from_frames(
         file_path, fourcc, configuration.frames_per_second, (width, height)
     )
 
-    for frame in frames:
-        # Make sure that the frame is shaped correctly for the writer.
-        if frame.shape[:2] != (height, width):
-            frame = cv2.resize(frame, (width, height))
+    # Make sure that the frame is shaped correctly for the writer.
+    if configuration.enable_multiprocessing:
+        resized_frames = execute_parallel_tasks(
+            (
+                partial(resize_frame, frames[i], (width, height))
+                for i in range(0, len(frames))
+            ),
+            max_workers=configuration.max_workers,
+            verbose=configuration.verbose,
+            description="Resizing frames",
+        )
 
-        video_writer.write(frame)
+        for frame in resized_frames:
+            video_writer.write(frame)
+    else:
+        for frame in tqdm(
+            range(0, len(frames)),
+            desc="Resizing frames",
+            disable=not configuration.verbose,
+            bar_format=TQDM_BAR_FORMAT,
+            colour=TQDM_BAR_COLOUR_GREEN,
+        ):
+            frame = resize_frame(frame, (width, height))
+            video_writer.write(frame)
 
     video_writer.release()
 
@@ -152,6 +180,12 @@ def create_frames_from_capture(
     return frames
 
 
+@dataclass
+class CV2VideoManager(VideoHandler):
+    write = create_video_from_frames
+    read = create_frames_from_video
+
+
 def get_grid_layout(
     bin: Tuple[int, int], rectangles: List[Tuple[int, int]]
 ) -> GridLayout:
@@ -183,7 +217,7 @@ def get_grid_layout(
     return layout
 
 
-def pil_to_cv2(image: Union[BaseImage, Image]) -> MatLike:
+def _pil_to_cv2(image: Union[BaseImage, Image]) -> MatLike:
     """
     Helper function that converts a PIL image to CV2 image array.
 
@@ -206,7 +240,7 @@ def pil_to_cv2(image: Union[BaseImage, Image]) -> MatLike:
     return cv2_image_array
 
 
-def cv2_to_pil(cv2_image_array: MatLike) -> Image:
+def _cv2_to_pil(cv2_image_array: MatLike) -> Image:
     """
     Helper function that converts a CV2 image array to PIL image.
 
@@ -218,3 +252,15 @@ def cv2_to_pil(cv2_image_array: MatLike) -> Image:
     pil_image = fromarray(image_array)
 
     return pil_image
+
+
+def resize_frame(frame: MatLike, size: Tuple[int, int]):
+    """
+    Resizes the frame according to the width and height given."""
+
+    width, height = size
+
+    if frame.shape[:2] != size:
+        frame = cv2.resize(frame, (width, height))
+
+    return frame

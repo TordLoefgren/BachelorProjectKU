@@ -11,18 +11,12 @@ import qrcode
 import segno
 from PIL import Image
 from qrcode.util import MODE_8BIT_BYTE, QRData
-from src.constants import (
-    MAX_SIZE,
-    RGB,
-    TQDM_BAR_COLOUR_GREEN,
-    TQDM_BAR_FORMAT_STRING,
-    MatLike,
-)
+from src.constants import MAX_SIZE, RGB, TQDM_BAR_COLOUR_GREEN, TQDM_BAR_FORMAT, MatLike
 from src.enums import QRErrorCorrectionLevel, QRPackage
 from src.performance import execute_parallel_tasks
 from src.qr_configuration import QREncodingConfiguration
 from src.utils import bytes_to_display
-from src.video_processing import GridLayout, get_grid_layout, pil_to_cv2
+from src.video_processing import GridLayout, _pil_to_cv2, get_grid_layout
 from tqdm import tqdm
 
 GENERATING_IMAGES_STRING = "Generating QR code images"
@@ -53,7 +47,7 @@ def generate_qr_images(
     if configuration.chunk_size is not None:
         max_bytes = min(configuration.chunk_size, max_bytes)
 
-    if configuration.enable_parallelization:
+    if configuration.enable_multiprocessing:
         return execute_parallel_tasks(
             (
                 partial(_generate_qr_image, data[i : i + max_bytes], configuration)
@@ -70,11 +64,12 @@ def generate_qr_images(
             range(0, len(data), max_bytes),
             desc=GENERATING_IMAGES_STRING,
             disable=not configuration.verbose,
-            bar_format=TQDM_BAR_FORMAT_STRING,
+            bar_format=TQDM_BAR_FORMAT,
             colour=TQDM_BAR_COLOUR_GREEN,
         ):
             image = _generate_qr_image(data[i : i + max_bytes], configuration)
             images.append(image)
+
         return images
 
 
@@ -168,7 +163,7 @@ def _generate_qr_image(data: bytes, configuration: QREncodingConfiguration) -> M
     else:
         raise ValueError(f"Unexpected value: {type(configuration.qr_package)}.")
 
-    return pil_to_cv2(image)
+    return _pil_to_cv2(image)
 
 
 def _generate_image_frame(

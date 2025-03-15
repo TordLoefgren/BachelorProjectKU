@@ -6,9 +6,9 @@ import cProfile
 import pstats
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from time import perf_counter
-from typing import Callable, Iterable, List, Optional, Tuple, overload
+from typing import Callable, Dict, Iterable, List, Optional, Tuple, overload
 
-from src.constants import TQDM_BAR_COLOUR_GREEN, TQDM_BAR_FORMAT_STRING, T
+from src.constants import TQDM_BAR_COLOUR_GREEN, TQDM_BAR_FORMAT
 from tqdm import tqdm
 
 
@@ -19,12 +19,12 @@ def measure_task_performance_decorator(task: Callable[..., None]) -> None:
 
 
 @overload
-def measure_task_performance_decorator(task: Callable[..., T]) -> T:
+def measure_task_performance_decorator[T](task: Callable[..., T]) -> T:
     """Overload function for tasks returning T."""
     ...
 
 
-def measure_task_performance_decorator(task: Callable[..., T]):
+def measure_task_performance_decorator[T](task: Callable[..., T]):
     """
     Function that wraps a task and times its performance, using cProfile.
     """
@@ -49,12 +49,12 @@ def measure_task_performance(task: Callable[..., None]) -> float:
 
 
 @overload
-def measure_task_performance(task: Callable[..., T]) -> Tuple[T, float]:
+def measure_task_performance[T](task: Callable[..., T]) -> Tuple[T, float]:
     """Overload function for tasks returning T."""
     ...
 
 
-def measure_task_performance(task: Callable[..., T]):
+def measure_task_performance[T](task: Callable[..., T]):
     """
     Function that wraps a task and times its performance.
 
@@ -73,7 +73,7 @@ def measure_task_performance(task: Callable[..., T]):
     return result, duration
 
 
-def execute_parallel_tasks(
+def execute_parallel_tasks[T](
     tasks: Iterable[Callable[..., T]],
     verbose: bool = False,
     description: str = "Processing",
@@ -82,28 +82,30 @@ def execute_parallel_tasks(
     """
     A function that executes iterable tasks in parallel and returns the results in a list.
     """
-
-    results: List[T] = []
+    results: Dict[int, T] = {}
 
     with ProcessPoolExecutor(max_workers=max_workers) as executor:
         futures = {
             i: executor.submit(_execute_task, task) for i, task in enumerate(tasks)
         }
 
+        future_to_index_lookup = {future: i for i, future in futures.items()}
+
         for future in tqdm(
             as_completed(futures.values()),
             total=len(futures),
             desc=description,
             disable=not verbose,
-            bar_format=TQDM_BAR_FORMAT_STRING,
+            bar_format=TQDM_BAR_FORMAT,
             colour=TQDM_BAR_COLOUR_GREEN,
         ):
-            results.append(future.result())
+            index = future_to_index_lookup[future]
+            results[index] = future.result()
 
-    return [results[i] for i in sorted(futures)]
+    return [results[i] for i in sorted(results)]
 
 
-def _execute_task(task: Callable[..., T]) -> T:
+def _execute_task[T](task: Callable[..., T]) -> T:
     """
     Helper method that allows the process pool executor to execute callables.
     """

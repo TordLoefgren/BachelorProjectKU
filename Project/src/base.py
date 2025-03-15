@@ -2,11 +2,11 @@
 A module containing core classes and functions that are used by other modules in the package.
 """
 
+import base64
 from dataclasses import dataclass
-from typing import Callable, List, Optional, Union
+from typing import Callable, List, Optional
 
-from src.constants import T, TFrame, TSerialized
-from src.utils import bytes_to_display, to_bytes
+from src.utils import bytes_to_display, get_core_specifications
 
 
 class PipelineValidationException(Exception):
@@ -15,7 +15,7 @@ class PipelineValidationException(Exception):
 
 @dataclass
 class EncodingConfiguration:
-    enable_parallelization: bool = True
+    enable_multiprocessing: bool = True
     frames_per_second: int = 24
     show_decoding_window: bool = False
     verbose: bool = False
@@ -24,80 +24,169 @@ class EncodingConfiguration:
 
 
 @dataclass
-class PipelineResult:
+class Result[T]:
     """
-    A dataclass that encapsulates the result of a pipeline run.
+    A dataclass that encapsulates the result of an operation.
     """
 
-    value: Optional[T] = None
-    exception: Optional[Exception] = None
+    value: Optional[T]
+    exception: Optional[Exception]
 
     @property
     def is_valid(self):
         return self.exception is None
 
 
-SerializeFunction = Callable[[T], TSerialized]
-DeserializeFunction = Callable[[TSerialized], T]
-
-EncodeFunction = Callable[[Union[T, TSerialized], EncodingConfiguration], List[TFrame]]
-DecodeFunction = Callable[[List[TFrame], EncodingConfiguration], Union[T, TSerialized]]
-
-WriteVideoFunction = Callable[[List[TFrame], str, EncodingConfiguration], None]
-ReadVideoFunction = Callable[[str, EncodingConfiguration], List[TFrame]]
-
-ValidateFunction = Callable[[T, T], bool]
-
-
-def validate_equal_sizes(input: T, output: T) -> bool:
+@dataclass
+class Serializer[TSerialized]:
     """
-    A simple validation function that compares the lengths of input and output.
+    A dataclass that encapsulates the serializing logic of the pipeline.
     """
 
-    return len(input) == len(output)
+    serialize: Callable[[bytes], TSerialized]
+    deserialize: Callable[[TSerialized], bytes]
 
 
 @dataclass
-class VideoEncodingPipeline:
+class Base64Serializer(Serializer):
+    """
+    A serializer for base64 encoding.
+    """
+
+    serialize = base64.b64encode
+    deserialize = base64.b64decode
+
+
+@dataclass
+class Encoder[TSerialized, TFrame]:
+    """
+    A dataclass that encapsulates the encoding logic of the pipeline.
+    """
+
+    encode: Callable[[TSerialized, EncodingConfiguration], List[TFrame]]
+    decode: Callable[[List[TFrame], EncodingConfiguration], TSerialized]
+
+
+@dataclass
+class VideoHandler[TFrame]:
+    """
+    A dataclass that encapsulates the video I/O logic of the pipeline.
+    """
+
+    write: Callable[[List[TFrame], str, EncodingConfiguration], None]
+    read: Callable[[str, EncodingConfiguration], List[TFrame]]
+
+
+ValidationFunction = Callable[[bytes, bytes], bool]
+
+
+def validate_equals(input: bytes, output: bytes) -> bool:
+    """
+    A simple validation function that compares the input and output.
+    """
+
+    return input == output
+
+
+@dataclass
+class VideoEncodingPipeline[TFrame]:
     """A dataclass representing a video encoding pipeline."""
 
-    encode_function: EncodeFunction
-    decode_function: DecodeFunction
-    write_video_function: WriteVideoFunction
-    read_video_function: ReadVideoFunction
-    serialize_function: Optional[SerializeFunction] = None
-    deserialize_function: Optional[DeserializeFunction] = None
-    validate_function: Optional[ValidateFunction] = None
+    serializer: Serializer
+    encoder: Encoder
+    video_handler: VideoHandler
+    validation_function: ValidationFunction
 
-    def run_encode(self, data: T, configuration: EncodingConfiguration) -> List[TFrame]:
-        """
-        Runs the encoding part of the pipeline.
-        """
-
-        if self.serialize_function is not None:
-            data = self.serialize_function(data)
-
-        if configuration.verbose:
-            print("Encoding...")
-
-        return self.encode_function(data, configuration)
-
-    def run_encode_to_video(
-        self, data: T, file_path: str, configuration: EncodingConfiguration
-    ) -> None:
+    def encode(
+        self,
+        data: bytes,
+        configuration: EncodingConfiguration,
+        file_path: Optional[str] = None,
+    ) -> List[TFrame]:
         """
         Runs the encoding part of the pipeline, including generating a video from frames.
         """
 
-        frames = self.run_encode(data, configuration)
+        frames = self._encode(data, configuration)
 
-        self.write_video_function(frames, file_path, configuration)
+        if file_path is not None:
+            self.video_handler.write(frames, file_path, configuration)
 
-    def run_decode(
+        return frames
+
+    def decode(
+        self,
+        configuration: EncodingConfiguration,
+        file_path: Optional[str] = None,
+        frames: Optional[List[TFrame]] = None,
+    ) -> bytes:
+        """
+        Runs the decoding part of the pipeline, including extracting frames from a video.
+        """
+
+        if file_path is not None:
+            frames = self.video_handler.read(file_path, configuration)
+        elif frames is None:
+            raise ValueError("Supply either a file path or frames for decoding.")
+
+        return self._decode(frames, configuration)
+
+    def run(
+        self,
+        input: bytes,
+        file_path: str,
+        configuration: EncodingConfiguration,
+        mock: bool = False,
+    ) -> Result[bytes]:
+        """
+        Runs the full pipeline, making a roundtrip.
+        """
+
+        verbose = configuration.verbose
+        if verbose:
+            self._print_start(configuration, len(input))
+
+        frames = self.encode(input, configuration, file_path if not mock else None)
+
+        if not mock:
+            frames = self.video_handler.read(file_path, configuration)
+
+        output = self.decode(configuration, file_path if not mock else None, frames)
+
+        is_valid = self.validation_function(input, output)
+
+        if verbose:
+            self._print_stop(is_valid, output_length=len(output))
+
+        if not is_valid:
+            return Result(
+                value=None,
+                exception=PipelineValidationException(
+                    "The decoded data does not match the encoded data. "
+                ),
+            )
+
+        return Result(value=output, exception=None)
+
+    def _encode(
+        self, data: bytes, configuration: EncodingConfiguration
+    ) -> List[TFrame]:
+        """
+        Runs the encoding part of the pipeline.
+        """
+
+        serialized_data = self.serializer.serialize(data)
+
+        if configuration.verbose:
+            print("Encoding...")
+
+        return self.encoder.encode(serialized_data, configuration)
+
+    def _decode(
         self,
         frames: List[TFrame],
         configuration: EncodingConfiguration,
-    ) -> T:
+    ) -> bytes:
         """
         Runs the decoding part of the pipeline.
         """
@@ -105,75 +194,48 @@ class VideoEncodingPipeline:
         if configuration.verbose:
             print("\nDecoding...")
 
-        result = self.decode_function(frames, configuration)
+        result = self.encoder.decode(frames, configuration)
 
-        if self.deserialize_function is not None:
-            result = self.deserialize_function(result)
+        deserialized_data = self.serializer.deserialize(result + b"==")
 
-        return result
+        return deserialized_data
 
-    def run_decode_from_video(
-        self, file_path: str, configuration: EncodingConfiguration
+    def _print_start(
+        self, configuration: EncodingConfiguration, input_length: int
     ) -> None:
         """
-        Runs the decoding part of the pipeline, including extracting frames from a video.
+        Prints the pipeline starting information.
         """
 
-        frames = self.read_video_function(file_path, configuration)
+        print("│")
+        print(f"│ Multiprocessing:     {configuration.enable_multiprocessing}")
 
-        return self.run_decode(frames, configuration)
+        if configuration.enable_multiprocessing:
+            physical_cores, logical_cores = get_core_specifications()
+            max_processes = (
+                configuration.max_workers
+                if configuration.max_workers is not None
+                else logical_cores
+            )
 
-    def run(
-        self,
-        input: T,
-        file_path: str,
-        configuration: EncodingConfiguration,
-        mock: bool = False,
-    ) -> PipelineResult:
+            print(f"│ Physical cores:      {physical_cores}")
+            print(f"│ Logical cores:       {logical_cores}")
+            print(f"│ Max processes:       {max_processes}")
+
+        print("│")
+        print(f"│ Input size:          {bytes_to_display(input_length)}")
+        print("│")
+        print("└──── Running pipeline ────┐")
+        print("                           │\n")
+
+    def _print_stop(self, is_valid: bool, output_length: int) -> None:
         """
-        Runs the full pipeline, making a roundtrip.
+        Prints the pipeline stop information.
         """
 
-        verbose = configuration.verbose
-        if verbose:
-            print("│")
-            print(f"│ Input size: {bytes_to_display(len(to_bytes(input)))}")
-            print(f"│ Input type: {str(type(input))}")
-            print("│")
-            print("└──── Running pipeline ────┐")
-            print("                           │\n")
-
-        frames_in = self.run_encode(input, configuration)
-
-        if not mock:
-            self.write_video_function(frames_in, file_path, configuration)
-            frames_out = self.read_video_function(file_path, configuration)
-        else:
-            frames_out = frames_in
-
-        output = self.run_decode(frames_out, configuration)
-
-        result = PipelineResult(output)
-
-        if verbose:
-            print("\n                           │")
-            print("┌──── Finished pipeline ───┘")
-            print("│")
-            print(f"│ Output size: {bytes_to_display(len(to_bytes(output)))}")
-            print(f"│ Output type: {str(type(output))}")
-            print("│")
-
-        if self.validate_function is not None:
-            is_valid = self.validate_function(input, output)
-
-            if verbose:
-                print(f"│ Validation: {"Success" if is_valid else "Failure"}\n")
-
-            if not is_valid:
-                return PipelineResult(
-                    exception=PipelineValidationException(
-                        "The decoded data does not match the encoded data. "
-                    )
-                )
-
-        return result
+        print("\n                           │")
+        print("┌──── Finished pipeline ───┘")
+        print("│")
+        print(f"│ Output size:          {bytes_to_display(output_length)}")
+        print("│")
+        print(f"│ Validation:           {"Success" if is_valid else "Failure"}\n")

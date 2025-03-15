@@ -6,7 +6,7 @@ from functools import partial
 from typing import List
 
 from pyzbar.pyzbar import ZBarSymbol, decode
-from src.constants import TQDM_BAR_COLOUR_GREEN, TQDM_BAR_FORMAT_STRING, MatLike
+from src.constants import TQDM_BAR_COLOUR_GREEN, TQDM_BAR_FORMAT, MatLike
 from src.performance import execute_parallel_tasks
 from src.qr_configuration import QREncodingConfiguration
 from tqdm import tqdm
@@ -26,7 +26,7 @@ def decode_frames_to_data(
 
     decoded_frames = bytearray()
 
-    if configuration.enable_parallelization:
+    if configuration.enable_multiprocessing:
         results = execute_parallel_tasks(
             tasks=(partial(_decode_qr_image, frame) for frame in frames),
             max_workers=configuration.max_workers,
@@ -40,7 +40,7 @@ def decode_frames_to_data(
             range(0, len(frames)),
             desc=DECODING_STRING,
             disable=not configuration.verbose,
-            bar_format=TQDM_BAR_FORMAT_STRING,
+            bar_format=TQDM_BAR_FORMAT,
             colour=TQDM_BAR_COLOUR_GREEN,
         ):
             decoded_frames.extend(_decode_qr_image(frames[i]))
