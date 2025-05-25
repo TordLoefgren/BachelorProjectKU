@@ -3,41 +3,67 @@ A module that contains functions for encoding QR codes.
 """
 
 import io
-import math
 from functools import partial
-from typing import List
+from typing import List, Optional
 
 import qrcode
 import segno
 from PIL import Image
 from qrcode.util import MODE_8BIT_BYTE, QRData
-from src.constants import MAX_SIZE, RGB, TQDM_BAR_COLOUR_GREEN, TQDM_BAR_FORMAT, MatLike
-from src.enums import QRErrorCorrectionLevel, QRPackage
+from src.constants import RGB, TQDM_BAR_COLOUR_GREEN, TQDM_BAR_FORMAT, MatLike
+from src.enums import QREncodingLibrary, QRErrorCorrectionLevel
 from src.performance import execute_parallel_tasks
 from src.qr_configuration import QREncodingConfiguration
 from src.utils import bytes_to_display
-from src.video_processing import GridLayout, _pil_to_cv2, get_grid_layout
+from src.video_processing import _pil_to_cv2
 from tqdm import tqdm
 
-GENERATING_IMAGES_STRING = "Generating QR code images"
+ENCODING_QR_FRAMES_STRING = "Encoding QR code frames"
 
 
 def encode_data_to_frames(
-    data: bytes, configuration: QREncodingConfiguration
+    data: bytes, configuration: Optional[QREncodingConfiguration]
 ) -> List[MatLike]:
     """
     Generates a sequence of QR code images from the given data and creates frames from these images.
     """
 
-    images = generate_qr_images(data, configuration)
-    frames = generate_image_frames(images, configuration)
-
-    return frames
+    return generate_qr_frames(data, configuration)
 
 
-def generate_qr_images(
+def qr_version_for_size(
+    data_len: int, qr_encoding_library, error_correction: QRErrorCorrectionLevel
+) -> int:
+    """
+    Returns the smallest possible QR version that can hold payload.
+    """
+
+    data = b"\0" * data_len
+
+    if qr_encoding_library == QREncodingLibrary.QRCODE:
+        qr = qrcode.QRCode(
+            version=None,
+            error_correction=QRErrorCorrectionLevel.to_qrcode(error_correction),
+        )
+
+        qr.add_data(data)
+        qr.make(fit=True)
+
+    elif qr_encoding_library == QREncodingLibrary.SEGNO:
+        qr = segno.make_qr(
+            content=data,
+            mode="byte",
+            error=QRErrorCorrectionLevel.to_segno(error_correction),
+        )
+    else:
+        raise ValueError(f"Unexpected encoding library: {qr_encoding_library}")
+
+    return qr.version
+
+
+def generate_qr_frames(
     data: bytes,
-    configuration: QREncodingConfiguration,
+    configuration: Optional[QREncodingConfiguration],
 ) -> List[MatLike]:
     """
     Generates a list of QR code images based on chunks of the given data.
@@ -53,16 +79,17 @@ def generate_qr_images(
                 partial(_generate_qr_image, data[i : i + max_bytes], configuration)
                 for i in range(0, len(data), max_bytes)
             ),
+            length=len(range(0, len(data), max_bytes)),
             max_workers=configuration.max_workers,
             verbose=configuration.verbose,
-            description=GENERATING_IMAGES_STRING,
+            description=ENCODING_QR_FRAMES_STRING,
         )
     else:
         images: List[MatLike] = []
 
         for i in tqdm(
             range(0, len(data), max_bytes),
-            desc=GENERATING_IMAGES_STRING,
+            desc=ENCODING_QR_FRAMES_STRING,
             disable=not configuration.verbose,
             bar_format=TQDM_BAR_FORMAT,
             colour=TQDM_BAR_COLOUR_GREEN,
@@ -71,49 +98,6 @@ def generate_qr_images(
             images.append(image)
 
         return images
-
-
-def generate_image_frames(
-    images: List[MatLike], configuration: QREncodingConfiguration
-) -> List[MatLike]:
-    """
-    Generates a list of QR image frames, based on combined QR images.
-    """
-
-    if not images:
-        return []
-
-    # If the list contains a single image, or if every frame contains a single image each, we simply return the list.
-    if configuration.qr_codes_per_frame == 1 or len(images) == 1:
-        return images
-
-    # If more than one QR code is shown per frame, we need to generate a new combined image for every frame.
-    total_frames = math.ceil(len(images) / configuration.qr_codes_per_frame)
-
-    # TODO: Determine a way to minimize the image size, given the number and sizes of the frames.
-
-    frames: List[MatLike] = []
-
-    rectangles = [(image.shape[0], image.shape[1]) for image in images]
-
-    # TODO: Implement parallelization option.
-    for i in range(total_frames):
-        start = i * configuration.qr_codes_per_frame
-        stop = (i + 1) * configuration.qr_codes_per_frame
-
-        layout = get_grid_layout(
-            MAX_SIZE,
-            rectangles[start:stop],
-        )
-
-        new_frame = _generate_image_frame(
-            images[start:stop],
-            layout,
-        )
-
-        frames.append(new_frame)
-
-    return frames
 
 
 def _generate_qr_image(data: bytes, configuration: QREncodingConfiguration) -> MatLike:
@@ -132,7 +116,7 @@ def _generate_qr_image(data: bytes, configuration: QREncodingConfiguration) -> M
 
     image = None
 
-    if configuration.qr_package == QRPackage.QRCODE:
+    if configuration.qr_encoding_library == QREncodingLibrary.QRCODE:
         qr = qrcode.QRCode(
             border=configuration.border,
             box_size=configuration.box_size,
@@ -141,13 +125,12 @@ def _generate_qr_image(data: bytes, configuration: QREncodingConfiguration) -> M
             ),
         )
 
-        qr_data = QRData(data, mode=MODE_8BIT_BYTE)
-        qr.add_data(qr_data)
+        qr.add_data(QRData(data, mode=MODE_8BIT_BYTE))
         qr.make(fit=True)
 
         image = qr.make_image()
 
-    elif configuration.qr_package == QRPackage.SEGNO:
+    elif configuration.qr_encoding_library == QREncodingLibrary.SEGNO:
         qr = segno.make_qr(
             content=data,
             mode="byte",
@@ -155,33 +138,14 @@ def _generate_qr_image(data: bytes, configuration: QREncodingConfiguration) -> M
         )
 
         out = io.BytesIO()
-        qr.save(out=out, scale=5, kind="png", border=10)
+        qr.save(out=out, scale=5, kind="png", border=configuration.border)
         out.seek(0)
 
         image = Image.open(out).convert(RGB)
 
     else:
-        raise ValueError(f"Unexpected value: {type(configuration.qr_package)}.")
+        raise ValueError(
+            f"Unexpected value: {type(configuration.qr_encoding_library)}."
+        )
 
     return _pil_to_cv2(image)
-
-
-def _generate_image_frame(
-    images: List[MatLike],
-    layout: GridLayout,
-) -> MatLike:
-    """
-    Generates a single QR image frame, based on combined QR images.
-    """
-
-    # TODO: Have this function use MatLike and not Image.
-
-    frame = Image.new(RGB, layout.size)
-
-    for i in range(len(images)):
-        # We follow the indices set during the layout initialization.
-        index = layout.rectangle_indices[i]
-        current_image = images[index].get_image()
-        Image.Image.paste(frame, current_image, layout.rectangles[index])
-
-    return frame

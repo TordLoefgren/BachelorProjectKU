@@ -3,7 +3,7 @@ from unittest import TestCase
 from parameterized import parameterized
 from src.enums import QRErrorCorrectionLevel
 from src.qr_configuration import QREncodingConfiguration
-from src.qr_encoding import generate_qr_images
+from src.qr_encoding import generate_qr_frames
 from src.utils import generate_random_bytes
 
 
@@ -25,8 +25,8 @@ class TestQREncoding(TestCase):
             (QRErrorCorrectionLevel.H, 1, 4, 5),
         ],
     )
-    def test__generate_qr_images__should__return_correct_number_of_images__when__data_is_chunked(
-        self, error_correct_level, remainder, chunk_size, expected_images_length
+    def test__generate_qr_frames__should__return_correct_number_of_frames__when__data_is_chunked(
+        self, error_correct_level, remainder, chunk_size, expected_frames_length
     ) -> None:
 
         # Arrange
@@ -36,7 +36,7 @@ class TestQREncoding(TestCase):
         configuration = QREncodingConfiguration(error_correction=error_correct_level)
 
         # Act
-        images = generate_qr_images(input_data_bytes, configuration)
+        frames = generate_qr_frames(input_data_bytes, configuration)
 
         # Assert
-        self.assertEqual(len(images), expected_images_length)
+        self.assertEqual(len(frames), expected_frames_length)

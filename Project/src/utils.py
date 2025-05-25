@@ -3,8 +3,8 @@ A module containing utility functions that are used by other modules in the pack
 """
 
 import os
+import random
 from pathlib import Path
-from random import choice, randbytes
 from string import ascii_uppercase
 from tkinter import filedialog
 from typing import Optional, Tuple
@@ -20,19 +20,21 @@ def generate_random_ascii_string(n: int) -> str:
     Generates a string of n random ascii uppercase characters.
     """
 
-    return "".join(choice(ascii_uppercase) for _ in range(n))
+    return "".join(random.choice(ascii_uppercase) for _ in range(n))
 
 
-def generate_random_bytes(n: int) -> bytes:
+def generate_random_bytes(n: int, seed: Optional[int] = None) -> bytes:
     """
     Generates n random bytes.
     """
 
-    return randbytes(n)
+    if seed is not None:
+        random.seed(seed)
+
+    return random.randbytes(n)
 
 
 # endregion
-
 
 # region ----- Files -----
 
@@ -96,24 +98,28 @@ def open_file_dialog() -> str:
 
 # endregion
 
-
 # region ----- Miscellaneous -----
 
 
-def bytes_to_display(num_bytes: int, factor: int = 1024) -> str:
+def bytes_to_display(num_bytes: int, as_binary: bool = False) -> str:
     """
     Inspiration from:
     https://stackoverflow.com/questions/1094841/get-a-human-readable-version-of-a-file-size
     """
 
-    units = ["B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"]
+    if as_binary:
+        factor = 1024
+        units = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"]
+    else:
+        factor = 1000
+        units = ["B", "kB", "MB", "GB", "TB", "PB"]
 
     for unit in units:
         if num_bytes < factor:
             return f"{num_bytes:.2f} {unit}"
         num_bytes /= factor
 
-    return f"{num_bytes:.2f} YB"
+    return f"{num_bytes:.2f} {units[-1]}"
 
 
 def get_core_specifications() -> Tuple[int, int]:

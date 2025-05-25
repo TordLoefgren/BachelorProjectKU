@@ -3,14 +3,12 @@ A module containing core classes and functions that are used by other modules in
 """
 
 import base64
+import pickle
 from dataclasses import dataclass
 from typing import Callable, List, Optional
 
+from src.constants import BYTE_ORDER_BIG, CONFIGURATION_HEADER_LENGTH_BYTES
 from src.utils import bytes_to_display, get_core_specifications
-
-
-class PipelineValidationException(Exception):
-    pass
 
 
 @dataclass
@@ -21,6 +19,39 @@ class EncodingConfiguration:
     verbose: bool = False
     chunk_size: Optional[int] = None
     max_workers: Optional[int] = None
+
+    @staticmethod
+    def serialize_with_length_prefix(config: "EncodingConfiguration") -> bytes:
+        config_bytes = EncodingConfiguration.to_bytes(config)
+        length_bytes = len(config_bytes).to_bytes(
+            CONFIGURATION_HEADER_LENGTH_BYTES, byteorder=BYTE_ORDER_BIG
+        )
+        return length_bytes + config_bytes
+
+    @staticmethod
+    def deserialize_with_length_prefix(data: bytes) -> "EncodingConfiguration":
+        if len(data) < CONFIGURATION_HEADER_LENGTH_BYTES:
+            raise ValueError("Header too short to contain full configuration length.")
+
+        config_length = int.from_bytes(
+            data[:CONFIGURATION_HEADER_LENGTH_BYTES], byteorder=BYTE_ORDER_BIG
+        )
+        if len(data) < CONFIGURATION_HEADER_LENGTH_BYTES + config_length:
+            raise ValueError("Header too short to contain full configuration.")
+
+        config_bytes = data[
+            CONFIGURATION_HEADER_LENGTH_BYTES : CONFIGURATION_HEADER_LENGTH_BYTES
+            + config_length
+        ]
+        return EncodingConfiguration.from_bytes(config_bytes)
+
+    @staticmethod
+    def to_bytes(data) -> bytes:
+        return pickle.dumps(data)
+
+    @staticmethod
+    def from_bytes(data: bytes) -> "EncodingConfiguration":
+        return pickle.loads(data)
 
 
 @dataclass
@@ -37,6 +68,9 @@ class Result[T]:
         return self.exception is None
 
 
+# region ----- Serialization Layer -----
+
+
 @dataclass
 class Serializer[TSerialized]:
     """
@@ -47,14 +81,21 @@ class Serializer[TSerialized]:
     deserialize: Callable[[TSerialized], bytes]
 
 
-@dataclass
-class Base64Serializer(Serializer):
-    """
-    A serializer for base64 encoding.
-    """
+Base64Serializer = Serializer(serialize=base64.b64encode, deserialize=base64.b64decode)
 
-    serialize = base64.b64encode
-    deserialize = base64.b64decode
+IdentitySerializer = Serializer(
+    serialize=lambda b: b,
+    deserialize=lambda b: b,
+)
+
+Latin1Serializer = Serializer(
+    serialize=lambda b: b.decode("latin1").encode("latin1"),
+    deserialize=lambda b: b.decode("latin1").encode("latin1"),
+)
+
+# endregion
+
+# region ----- Encoding Layer-----
 
 
 @dataclass
@@ -64,7 +105,12 @@ class Encoder[TSerialized, TFrame]:
     """
 
     encode: Callable[[TSerialized, EncodingConfiguration], List[TFrame]]
-    decode: Callable[[List[TFrame], EncodingConfiguration], TSerialized]
+    decode: Callable[[List[TFrame], Optional[EncodingConfiguration]], TSerialized]
+
+
+# endregion
+
+# region ----- Video Layer -----
 
 
 @dataclass
@@ -77,6 +123,10 @@ class VideoHandler[TFrame]:
     read: Callable[[str, EncodingConfiguration], List[TFrame]]
 
 
+# endregion
+
+# region ----- Validation Layer -----
+
 ValidationFunction = Callable[[bytes, bytes], bool]
 
 
@@ -86,6 +136,15 @@ def validate_equals(input: bytes, output: bytes) -> bool:
     """
 
     return input == output
+
+
+# endregion
+
+# region ----- Pipeline -----
+
+
+class PipelineValidationException(Exception):
+    pass
 
 
 @dataclass
@@ -105,18 +164,39 @@ class VideoEncodingPipeline[TFrame]:
     ) -> List[TFrame]:
         """
         Runs the encoding part of the pipeline, including generating a video from frames.
+
+        The frames are returned.
         """
 
-        frames = self._encode(data, configuration)
+        if configuration.verbose:
+            print("Encoding...")
 
-        if file_path is not None:
-            self.video_handler.write(frames, file_path, configuration)
+        # Configuration header.
+        header_with_length = EncodingConfiguration.serialize_with_length_prefix(
+            configuration
+        )
+        header_serialized = self.serializer.serialize(header_with_length)
+        header_frames = self.encoder.encode(header_serialized, configuration)
 
-        return frames
+        if len(header_frames) != 1:
+            raise PipelineValidationException(
+                "The configuration header must be exactly one frame."
+            )
+
+        # Payload.
+        payload_serialized = self.serializer.serialize(data)
+        payload_frames = self.encoder.encode(payload_serialized, configuration)
+
+        total_frames = header_frames + payload_frames
+
+        if file_path:
+            self.video_handler.write(total_frames, file_path, configuration)
+
+        return total_frames
 
     def decode(
         self,
-        configuration: EncodingConfiguration,
+        configuration: Optional[EncodingConfiguration],
         file_path: Optional[str] = None,
         frames: Optional[List[TFrame]] = None,
     ) -> bytes:
@@ -124,12 +204,21 @@ class VideoEncodingPipeline[TFrame]:
         Runs the decoding part of the pipeline, including extracting frames from a video.
         """
 
-        if file_path is not None:
+        if configuration is not None and configuration.verbose:
+            print("\nDecoding...")
+
+        if file_path:
             frames = self.video_handler.read(file_path, configuration)
-        elif frames is None:
+        elif frames is None or not frames:
             raise ValueError("Supply either a file path or frames for decoding.")
 
-        return self._decode(frames, configuration)
+        raw_header_serialized = self.encoder.decode([frames[0]], None)
+        raw_header = self.serializer.deserialize(raw_header_serialized)
+        configuration = EncodingConfiguration.deserialize_with_length_prefix(raw_header)
+
+        # Payload.
+        raw_payload_serialized = self.encoder.decode(frames[1:], configuration)
+        return self.serializer.deserialize(raw_payload_serialized)
 
     def run(
         self,
@@ -151,7 +240,10 @@ class VideoEncodingPipeline[TFrame]:
         if not mock:
             frames = self.video_handler.read(file_path, configuration)
 
-        output = self.decode(configuration, file_path if not mock else None, frames)
+        try:
+            output = self.decode(configuration, file_path if not mock else None, frames)
+        except ValueError as exception:
+            return Result(None, exception=exception)
 
         is_valid = self.validation_function(input, output)
 
@@ -167,38 +259,6 @@ class VideoEncodingPipeline[TFrame]:
             )
 
         return Result(value=output, exception=None)
-
-    def _encode(
-        self, data: bytes, configuration: EncodingConfiguration
-    ) -> List[TFrame]:
-        """
-        Runs the encoding part of the pipeline.
-        """
-
-        serialized_data = self.serializer.serialize(data)
-
-        if configuration.verbose:
-            print("Encoding...")
-
-        return self.encoder.encode(serialized_data, configuration)
-
-    def _decode(
-        self,
-        frames: List[TFrame],
-        configuration: EncodingConfiguration,
-    ) -> bytes:
-        """
-        Runs the decoding part of the pipeline.
-        """
-
-        if configuration.verbose:
-            print("\nDecoding...")
-
-        result = self.encoder.decode(frames, configuration)
-
-        deserialized_data = self.serializer.deserialize(result + b"==")
-
-        return deserialized_data
 
     def _print_start(
         self, configuration: EncodingConfiguration, input_length: int
@@ -239,3 +299,6 @@ class VideoEncodingPipeline[TFrame]:
         print(f"│ Output size:          {bytes_to_display(output_length)}")
         print("│")
         print(f"│ Validation:           {"Success" if is_valid else "Failure"}\n")
+
+
+# endregion

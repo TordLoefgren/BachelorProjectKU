@@ -18,13 +18,13 @@ class QRErrorCorrectionLevel(Enum):
     H = 3
 
     @staticmethod
-    def to_segno(error: "QRErrorCorrectionLevel") -> str:
+    def to_segno(error_correction_level: "QRErrorCorrectionLevel") -> str:
         """
         Returns the 'segno' error correction level equivalent.
         """
 
-        if not isinstance(error, QRErrorCorrectionLevel):
-            raise ValueError(f"Unexpected value: {type(error)}.")
+        if not isinstance(error_correction_level, QRErrorCorrectionLevel):
+            raise ValueError(f"Unexpected value: {type(error_correction_level)}.")
 
         error_to_segno_lookup: Dict[QRErrorCorrectionLevel, str] = {
             QRErrorCorrectionLevel.L: "L",
@@ -33,16 +33,16 @@ class QRErrorCorrectionLevel(Enum):
             QRErrorCorrectionLevel.H: "H",
         }
 
-        return error_to_segno_lookup[error]
+        return error_to_segno_lookup[error_correction_level]
 
     @staticmethod
-    def to_qrcode(error: "QRErrorCorrectionLevel") -> int:
+    def to_qrcode(error_correction_level: "QRErrorCorrectionLevel") -> int:
         """
         Returns the 'qrcodes' error correction level equivalent.
         """
 
-        if not isinstance(error, QRErrorCorrectionLevel):
-            raise ValueError(f"Unexpected value: {type(error)}.")
+        if not isinstance(error_correction_level, QRErrorCorrectionLevel):
+            raise ValueError(f"Unexpected value: {type(error_correction_level)}.")
 
         error_to_qrcodes_lookup: Dict[QRErrorCorrectionLevel, int] = {
             QRErrorCorrectionLevel.L: 1,
@@ -51,10 +51,10 @@ class QRErrorCorrectionLevel(Enum):
             QRErrorCorrectionLevel.H: 2,
         }
 
-        return error_to_qrcodes_lookup[error]
+        return error_to_qrcodes_lookup[error_correction_level]
 
     @staticmethod
-    def to_max_bytes(error: "QRErrorCorrectionLevel") -> int:
+    def to_max_bytes(error_correction_level: "QRErrorCorrectionLevel") -> int:
         """
         Returns the maximum bytes size for the given error correction level.
 
@@ -62,8 +62,8 @@ class QRErrorCorrectionLevel(Enum):
 
         """
 
-        if not isinstance(error, QRErrorCorrectionLevel):
-            raise ValueError(f"Unexpected value: {type(error)}.")
+        if not isinstance(error_correction_level, QRErrorCorrectionLevel):
+            raise ValueError(f"Unexpected value: {type(error_correction_level)}.")
 
         error_to_max_bytes_lookup: Dict[QRErrorCorrectionLevel, int] = {
             QRErrorCorrectionLevel.L: 2953,
@@ -72,14 +72,26 @@ class QRErrorCorrectionLevel(Enum):
             QRErrorCorrectionLevel.H: 1273,
         }
 
-        return error_to_max_bytes_lookup[error]
+        return error_to_max_bytes_lookup[error_correction_level]
 
 
 @unique
-class QRPackage(Enum):
+class QREncodingLibrary(Enum):
     """
-    QR code packages in use.
+    QR code encoding libraries in use.
     """
 
     SEGNO = 0
     QRCODE = 1
+
+
+@unique
+class QRDecodingLibrary(Enum):
+    """
+    QR code decoding libraries in use.
+
+    OPEN CV not currently in use.
+    """
+
+    PYZBAR = 0
+    # OPEN_CV = 1

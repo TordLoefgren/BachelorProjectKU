@@ -15,7 +15,7 @@ from src.base import (
 )
 from src.qr_decoding import decode_frames_to_data
 from src.qr_encoding import encode_data_to_frames
-from src.video_processing import CV2VideoManager
+from src.video_processing import CV2VideoHandler
 
 
 @dataclass
@@ -27,7 +27,7 @@ class QREncoder(Encoder):
 def create_qr_video_encoding_pipeline(
     serializer: Serializer = Base64Serializer,
     encoder: Encoder = QREncoder,
-    video_handler: VideoHandler = CV2VideoManager,
+    video_handler: VideoHandler = CV2VideoHandler,
     validation_function: ValidationFunction = validate_equals,
 ) -> VideoEncodingPipeline:
     """

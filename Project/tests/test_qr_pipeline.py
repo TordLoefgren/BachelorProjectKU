@@ -2,12 +2,13 @@ from unittest import TestCase
 
 from parameterized import parameterized
 from src.constants import MatLike
+from src.enums import QREncodingLibrary, QRErrorCorrectionLevel
 from src.qr_configuration import QREncodingConfiguration
 from src.qr_pipeline import create_qr_video_encoding_pipeline
 from src.utils import generate_random_bytes, remove_file
 
-DATA_LENGTH = 100
-MOCK_FILE_NAME = "mock.mp4"
+DATA_LENGTH = 2331
+MOCK_FILE_NAME = "temp.mp4"
 
 
 class TestQRPipeline(TestCase):
@@ -49,26 +50,48 @@ class TestQRPipeline(TestCase):
 
     @parameterized.expand(
         [
-            (b"\xc3\xa4\xc2\xbd\xc2\xa0\xc3\xa5\xc2\xa5\xc2\xbd"),
-            (b"0xff, 0xfe, 0xfd, 0xfa, 0x00, 0x01, 0xf0, 0xc1, 0xc0, 0x80"),
-            (b"0xff, 0xfe, 0xfd, 0xfa, 0x00, 0x01, 0xf0, 0xc1, 0xc0, 0x80"),
-            (b"0xff, 0xfe, 0xfd, 0xfc, 0xfb, 0xfa, 0xf9, 0xf8, 0xf7, 0xf6"),
-            (b"0x00, 0x00, 0x01, 0x02, 0x00, 0x00, 0xff, 0x00, 0xab, 0xcd, 0xef"),
-            (b"0xed, 0xa0, 0x80, 0xed, 0xbf, 0xbf"),
-            (b"Quack quack!\xff\xfe\xfa\x00\x10ABC\x00\x00\xff\xff"),
-            (b"0xFE"),
-            (b"0xFF"),
-            (b"0x80"),
-            (b"0xED, 0xA0, 0x80"),
-        ],
+            (b"Hello World", QREncodingLibrary.SEGNO),
+            (b"\xff\xfe\xfd\xfa\x00\x01\xf0\xc1\xc0\x80", QREncodingLibrary.SEGNO),
+            (
+                b"\xc3\xa4\xc2\xbd\xc2\xa0\xc3\xa5\xc2\xa5\xc2\xbd",
+                QREncodingLibrary.SEGNO,
+            ),
+            (b"TEST TEST!\xff\xfe\xfa\x00ABC\x00\x00\xff\xff", QREncodingLibrary.SEGNO),
+            (
+                b"\xed\xa0\x80\xed\xbf\xbf",
+                QREncodingLibrary.SEGNO,
+            ),
+            (b"\xff", QREncodingLibrary.SEGNO),
+            (b"\x00", QREncodingLibrary.SEGNO),
+            (b"Hello World", QREncodingLibrary.QRCODE),
+            (b"\xff\xfe\xfd\xfa\x00\x01\xf0\xc1\xc0\x80", QREncodingLibrary.QRCODE),
+            (
+                b"\xc3\xa4\xc2\xbd\xc2\xa0\xc3\xa5\xc2\xa5\xc2\xbd",
+                QREncodingLibrary.QRCODE,
+            ),
+            (
+                b"TEST TEST!\xff\xfe\xfa\x00ABC\x00\x00\xff\xff",
+                QREncodingLibrary.QRCODE,
+            ),
+            (b"\xed\xa0\x80\xed\xbf\xbf", QREncodingLibrary.QRCODE),
+            (b"\xff", QREncodingLibrary.QRCODE),
+            (b"\x00", QREncodingLibrary.QRCODE),
+        ]
     )
-    def test__run___should__return_original_data(self, input_data) -> None:
-        # Arrange & Act
-        result = self.pipeline_default.run(
-            input_data, MOCK_FILE_NAME, self.configuration_default, mock=True
+    def test__run___should__return_original_data(
+        self,
+        input_data: bytes,
+        qr_encoding_library: QREncodingLibrary,
+    ) -> None:
+        configuration = QREncodingConfiguration(
+            qr_encoding_library=qr_encoding_library,
+            error_correction=QRErrorCorrectionLevel.H,
         )
 
-        # Assert
+        result = self.pipeline_default.run(
+            input_data, MOCK_FILE_NAME, configuration, mock=False
+        )
+
         self.assertTrue(result.is_valid)
         self.assertIsNotNone(result.value)
         self.assertIsNone(result.exception)

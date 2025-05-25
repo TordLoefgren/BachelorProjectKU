@@ -10,9 +10,8 @@ from typing import List, Optional, Tuple, Union
 import cv2
 import dxcam
 import numpy as np
-from PIL.Image import Image, fromarray
+from PIL.Image import Image
 from qrcode.image.base import BaseImage
-from rectpack import newPacker
 from src.base import EncodingConfiguration, VideoHandler
 from src.constants import (
     BGR,
@@ -25,12 +24,7 @@ from src.constants import (
 from src.performance import execute_parallel_tasks
 from tqdm import tqdm
 
-
-@dataclass
-class GridLayout:
-    size: Tuple[int, int]
-    rectangles: List[Tuple[int, int]]
-    rectangle_indices: List[int]
+# region ----- Video read / write -----
 
 
 def create_video_from_frames(
@@ -47,12 +41,16 @@ def create_video_from_frames(
         return
 
     # Extract reference frame to determine the video image dimensions.
-    reference_frame = frames[0]
+    reference_frame = frames[1]
     height, width = reference_frame.shape[:2]
 
     fourcc = cv2.VideoWriter_fourcc(*MP4V)
     video_writer = cv2.VideoWriter(
-        file_path, fourcc, configuration.frames_per_second, (width, height)
+        file_path,
+        fourcc,
+        configuration.frames_per_second,
+        (width, height),
+        isColor=True,
     )
 
     # Make sure that the frame is shaped correctly for the writer.
@@ -62,6 +60,7 @@ def create_video_from_frames(
                 partial(resize_frame, frames[i], (width, height))
                 for i in range(0, len(frames))
             ),
+            length=len(frames),
             max_workers=configuration.max_workers,
             verbose=configuration.verbose,
             description="Resizing frames",
@@ -70,14 +69,14 @@ def create_video_from_frames(
         for frame in resized_frames:
             video_writer.write(frame)
     else:
-        for frame in tqdm(
+        for i in tqdm(
             range(0, len(frames)),
             desc="Resizing frames",
             disable=not configuration.verbose,
             bar_format=TQDM_BAR_FORMAT,
             colour=TQDM_BAR_COLOUR_GREEN,
         ):
-            frame = resize_frame(frame, (width, height))
+            frame = resize_frame(frames[i], (width, height))
             video_writer.write(frame)
 
     video_writer.release()
@@ -85,7 +84,7 @@ def create_video_from_frames(
 
 def create_frames_from_video(
     file_path: str,
-    configuration: EncodingConfiguration,
+    configuration: Optional[EncodingConfiguration] = None,
 ) -> List[MatLike]:
     """
     Captures a video and returns all the frames.
@@ -102,18 +101,20 @@ def create_frames_from_video(
         if not ret:
             break
 
-        if configuration.show_decoding_window:
-            # TODO: See if there is a way to avoid having the window block operations.
-            cv2.imshow(f"Reading '{file_path}'", frame)
+        if configuration is not None:
+            if configuration.show_decoding_window:
+                cv2.imshow(f"Reading '{file_path}'", frame)
 
-        if configuration.show_decoding_window and cv2.waitKey(10) & 0xFF == ord("q"):
-            break
+            if configuration.show_decoding_window and cv2.waitKey(10) & 0xFF == ord(
+                "q"
+            ):
+                break
 
         frames.append(frame)
 
     capture.release()
 
-    if configuration.show_decoding_window:
+    if configuration is not None and configuration.show_decoding_window:
         cv2.destroyAllWindows()
 
     return frames
@@ -181,40 +182,12 @@ def create_frames_from_capture(
 
 
 @dataclass
-class CV2VideoManager(VideoHandler):
+class CV2VideoHandler(VideoHandler):
     write = create_video_from_frames
     read = create_frames_from_video
 
 
-def get_grid_layout(
-    bin: Tuple[int, int], rectangles: List[Tuple[int, int]]
-) -> GridLayout:
-    """
-    Computes the optimal X and Y coordinates for a list of rectangles within a given size constraint.
-
-    Using examples from: https://github.com/secnot/rectpack
-
-    Each rectangle is given an index as a unique identifier, maintaing its initial list ordering.
-    """
-
-    packer = newPacker()
-
-    for i, rect in enumerate(rectangles):
-        packer.add_rect(*rect, rid=i)
-
-    packer.add_bin(*bin)
-
-    packer.pack()
-
-    abin = packer[0]
-
-    layout = GridLayout(
-        size=(abin.width, abin.height),
-        rectangles=[(rect.x, rect.y) for rect in abin],
-        rectangle_indices=[rect.rid for rect in abin],
-    )
-
-    return layout
+# region ----- Image and frame helpers -----
 
 
 def _pil_to_cv2(image: Union[BaseImage, Image]) -> MatLike:
@@ -240,20 +213,6 @@ def _pil_to_cv2(image: Union[BaseImage, Image]) -> MatLike:
     return cv2_image_array
 
 
-def _cv2_to_pil(cv2_image_array: MatLike) -> Image:
-    """
-    Helper function that converts a CV2 image array to PIL image.
-
-    Inspiration from:
-    https://www.geeksforgeeks.org/convert-opencv-image-to-pil-image-in-python/
-    """
-
-    image_array = cv2.cvtColor(np.array(cv2_image_array), cv2.COLOR_BGR2RGB)
-    pil_image = fromarray(image_array)
-
-    return pil_image
-
-
 def resize_frame(frame: MatLike, size: Tuple[int, int]):
     """
     Resizes the frame according to the width and height given."""
@@ -264,3 +223,6 @@ def resize_frame(frame: MatLike, size: Tuple[int, int]):
         frame = cv2.resize(frame, (width, height))
 
     return frame
+
+
+# endregion

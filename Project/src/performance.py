@@ -2,44 +2,59 @@
 A module that contains functions used for measuring the performance of tasks.
 """
 
-import cProfile
-import pstats
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor
 from time import perf_counter
 from typing import Callable, Dict, Iterable, List, Optional, Tuple, overload
 
-from src.constants import TQDM_BAR_COLOUR_GREEN, TQDM_BAR_FORMAT
+from src.constants import (
+    MILLISECONDS_PER_SECOND,
+    TQDM_BAR_COLOUR_GREEN,
+    TQDM_BAR_FORMAT,
+)
 from tqdm import tqdm
 
-
-@overload
-def measure_task_performance_decorator(task: Callable[..., None]) -> None:
-    """Overload function for tasks returning None."""
-    ...
+# region ----- Multiprocessing -----
 
 
-@overload
-def measure_task_performance_decorator[T](task: Callable[..., T]) -> T:
-    """Overload function for tasks returning T."""
-    ...
-
-
-def measure_task_performance_decorator[T](task: Callable[..., T]):
+def execute_parallel_tasks[T](
+    tasks: Iterable[Callable[..., T]],
+    length: int,
+    verbose: bool = False,
+    description: str = "Processing",
+    max_workers: Optional[int] = None,
+) -> List[T]:
     """
-    Function that wraps a task and times its performance, using cProfile.
+    Executes iterable tasks in parallel and returns the ordered results in a list.
     """
 
-    def wrapper():
-        with cProfile.Profile() as profile:
-            task()
+    results: Dict[int, T] = {}
 
-        results = pstats.Stats(profile)
-        results.sort_stats(pstats.SortKey.TIME)
-        results.print_stats()
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        results = list(
+            tqdm(
+                executor.map(_execute_task, tasks),
+                total=length,
+                desc=description,
+                disable=not verbose,
+                bar_format=TQDM_BAR_FORMAT,
+                colour=TQDM_BAR_COLOUR_GREEN,
+            )
+        )
 
-        print(f"Task '{task.__name__}' finished in {results.total_tt:.4f} seconds.\n")
+    return results
 
-    return wrapper
+
+def _execute_task[T](task: Callable[..., T]) -> T:
+    """
+    Helper method that allows the process pool executor to execute callables.
+    """
+
+    return task()
+
+
+# endregion
+
+# region ----- Performance -----
 
 
 @overload
@@ -65,49 +80,12 @@ def measure_task_performance[T](task: Callable[..., T]):
 
     result = task()
 
-    duration = perf_counter() - start
+    duration_ms = (perf_counter() - start) * MILLISECONDS_PER_SECOND
 
     if result is None:
-        return duration
+        return duration_ms
 
-    return result, duration
-
-
-def execute_parallel_tasks[T](
-    tasks: Iterable[Callable[..., T]],
-    verbose: bool = False,
-    description: str = "Processing",
-    max_workers: Optional[int] = None,
-) -> List[T]:
-    """
-    A function that executes iterable tasks in parallel and returns the results in a list.
-    """
-    results: Dict[int, T] = {}
-
-    with ProcessPoolExecutor(max_workers=max_workers) as executor:
-        futures = {
-            i: executor.submit(_execute_task, task) for i, task in enumerate(tasks)
-        }
-
-        future_to_index_lookup = {future: i for i, future in futures.items()}
-
-        for future in tqdm(
-            as_completed(futures.values()),
-            total=len(futures),
-            desc=description,
-            disable=not verbose,
-            bar_format=TQDM_BAR_FORMAT,
-            colour=TQDM_BAR_COLOUR_GREEN,
-        ):
-            index = future_to_index_lookup[future]
-            results[index] = future.result()
-
-    return [results[i] for i in sorted(results)]
+    return result, duration_ms
 
 
-def _execute_task[T](task: Callable[..., T]) -> T:
-    """
-    Helper method that allows the process pool executor to execute callables.
-    """
-
-    return task()
+# endregion

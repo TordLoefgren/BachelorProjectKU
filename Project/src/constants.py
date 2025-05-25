@@ -3,7 +3,6 @@ A module containing constants and definitions used by other modules in the packa
 """
 
 from pathlib import Path
-from typing import Tuple
 
 from cv2.typing import MatLike as _matlike
 
@@ -14,19 +13,18 @@ MatLike = _matlike
 
 # endregion
 
-
 # region ----- constants -----
 
 
+MILLISECONDS_PER_SECOND = 1000
+CONFIGURATION_HEADER_LENGTH_BYTES = 4
+BYTE_ORDER_BIG = "big"
 BGR = "BGR"
 RGB = "RGB"
-# TODO: The max size should be determined dynamically or through the configuration.
-# We set a large max size in order to experiment with multi-QR code frames.
-MAX_SIZE: Tuple[int, int] = (4000, 4000)
 MP4V = "mp4v"
+FFV1 = "FFV1"
 PROJECT_DIRECTORY = Path(__file__).parent.parent
 TQDM_BAR_COLOUR_GREEN = "green"
-# See https://www.datacamp.com/tutorial/tqdm-python.
 TQDM_BAR_FORMAT = (
     "[{elapsed}<{remaining}] {n_fmt}/{total_fmt} | {l_bar}{bar} {rate_fmt}{postfix}"
 )
