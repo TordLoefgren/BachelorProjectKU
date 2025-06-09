@@ -4,7 +4,7 @@ A module that contains functions used for measuring the performance of tasks.
 
 from concurrent.futures import ProcessPoolExecutor
 from time import perf_counter
-from typing import Callable, Dict, Iterable, List, Optional, Tuple, overload
+from typing import Callable, Dict, Iterable, Iterator, List, Optional, Tuple, overload
 
 from src.constants import (
     MILLISECONDS_PER_SECOND,
@@ -42,6 +42,35 @@ def execute_parallel_tasks[T](
         )
 
     return results
+
+
+def execute_parallel_iter_tasks[T](
+    tasks: Iterable[Callable[..., T]],
+    length: int,
+    verbose: bool = False,
+    description: str = "Processing",
+    max_workers: Optional[int] = None,
+) -> Iterator[T]:
+    """
+    Executes iterable tasks in parallel and returns the ordered results as an iterator.
+    """
+
+    results: Dict[int, T] = {}
+
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        results = executor.map(_execute_task, tasks)
+
+        if verbose:
+            results = tqdm(
+                executor.map(_execute_task, tasks),
+                total=length,
+                desc=description,
+                disable=not verbose,
+                bar_format=TQDM_BAR_FORMAT,
+                colour=TQDM_BAR_COLOUR_GREEN,
+            )
+
+    yield from results
 
 
 def _execute_task[T](task: Callable[..., T]) -> T:

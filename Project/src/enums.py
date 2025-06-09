@@ -90,7 +90,7 @@ class QRDecodingLibrary(Enum):
     """
     QR code decoding libraries in use.
 
-    OPEN CV not currently in use.
+    OpenCV currently not in use.
     """
 
     PYZBAR = 0

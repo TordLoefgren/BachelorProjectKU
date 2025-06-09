@@ -15,7 +15,8 @@ MatLike = _matlike
 
 # region ----- constants -----
 
-
+BYTE_TO_MB = 1 / (1024**2)
+SEED = 42
 MILLISECONDS_PER_SECOND = 1000
 CONFIGURATION_HEADER_LENGTH_BYTES = 4
 BYTE_ORDER_BIG = "big"

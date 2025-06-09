@@ -1,4 +1,4 @@
-from typing import List
+from typing import Iterator
 
 from src.base import Base64Serializer, Result, Serializer
 from src.qr_configuration import QREncodingConfiguration
@@ -16,7 +16,7 @@ class QRVideoEncoder[TFrame]:
         self.configuration = configuration
         self.pipeline = create_qr_video_encoding_pipeline(serializer=serializer)
 
-    def encode(self, data: bytes, file_path: str) -> List[TFrame]:
+    def encode(self, data: bytes, file_path: str) -> Iterator[TFrame]:
         return self.pipeline.encode(data, self.configuration, file_path)
 
     def decode(self, file_path: str) -> bytes:

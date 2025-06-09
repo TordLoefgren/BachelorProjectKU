@@ -5,10 +5,11 @@ A module containing core classes and functions that are used by other modules in
 import base64
 import pickle
 from dataclasses import dataclass
-from typing import Callable, List, Optional
+from itertools import chain
+from typing import Callable, Iterator, Optional
 
 from src.constants import BYTE_ORDER_BIG, CONFIGURATION_HEADER_LENGTH_BYTES
-from src.utils import bytes_to_display, get_core_specifications
+from src.utils import bytes_to_display, get_core_specifications, try_get_iter_count
 
 
 @dataclass
@@ -52,6 +53,10 @@ class EncodingConfiguration:
     @staticmethod
     def from_bytes(data: bytes) -> "EncodingConfiguration":
         return pickle.loads(data)
+
+    def __post_init__(self):
+        if self.verbose is not False:
+            raise NotImplementedError()
 
 
 @dataclass
@@ -104,8 +109,8 @@ class Encoder[TSerialized, TFrame]:
     A dataclass that encapsulates the encoding logic of the pipeline.
     """
 
-    encode: Callable[[TSerialized, EncodingConfiguration], List[TFrame]]
-    decode: Callable[[List[TFrame], Optional[EncodingConfiguration]], TSerialized]
+    encode: Callable[[TSerialized, EncodingConfiguration, bool], Iterator[TFrame]]
+    decode: Callable[[Iterator[TFrame], Optional[EncodingConfiguration]], TSerialized]
 
 
 # endregion
@@ -119,8 +124,8 @@ class VideoHandler[TFrame]:
     A dataclass that encapsulates the video I/O logic of the pipeline.
     """
 
-    write: Callable[[List[TFrame], str, EncodingConfiguration], None]
-    read: Callable[[str, EncodingConfiguration], List[TFrame]]
+    write: Callable[[Iterator[TFrame], str, EncodingConfiguration], None]
+    read: Callable[[str, EncodingConfiguration], Iterator[TFrame]]
 
 
 # endregion
@@ -161,7 +166,7 @@ class VideoEncodingPipeline[TFrame]:
         data: bytes,
         configuration: EncodingConfiguration,
         file_path: Optional[str] = None,
-    ) -> List[TFrame]:
+    ) -> Iterator[TFrame]:
         """
         Runs the encoding part of the pipeline, including generating a video from frames.
 
@@ -176,18 +181,19 @@ class VideoEncodingPipeline[TFrame]:
             configuration
         )
         header_serialized = self.serializer.serialize(header_with_length)
-        header_frames = self.encoder.encode(header_serialized, configuration)
+        header_frames = self.encoder.encode(header_serialized, configuration, True)
 
-        if len(header_frames) != 1:
+        success, count, header_frames = try_get_iter_count(header_frames)
+        if success and count != 1:
             raise PipelineValidationException(
                 "The configuration header must be exactly one frame."
             )
 
         # Payload.
         payload_serialized = self.serializer.serialize(data)
-        payload_frames = self.encoder.encode(payload_serialized, configuration)
+        payload_frames = self.encoder.encode(payload_serialized, configuration, False)
 
-        total_frames = header_frames + payload_frames
+        total_frames = chain(header_frames, payload_frames)
 
         if file_path:
             self.video_handler.write(total_frames, file_path, configuration)
@@ -198,7 +204,7 @@ class VideoEncodingPipeline[TFrame]:
         self,
         configuration: Optional[EncodingConfiguration],
         file_path: Optional[str] = None,
-        frames: Optional[List[TFrame]] = None,
+        frames: Optional[Iterator[TFrame]] = None,
     ) -> bytes:
         """
         Runs the decoding part of the pipeline, including extracting frames from a video.
@@ -212,17 +218,22 @@ class VideoEncodingPipeline[TFrame]:
         elif frames is None or not frames:
             raise ValueError("Supply either a file path or frames for decoding.")
 
-        raw_header_serialized = self.encoder.decode([frames[0]], None)
+        try:
+            header_frame = next(frames)
+        except StopIteration:
+            raise ValueError("No frames provided for decoding.")
+
+        raw_header_serialized = self.encoder.decode([header_frame], None)
         raw_header = self.serializer.deserialize(raw_header_serialized)
         configuration = EncodingConfiguration.deserialize_with_length_prefix(raw_header)
 
         # Payload.
-        raw_payload_serialized = self.encoder.decode(frames[1:], configuration)
+        raw_payload_serialized = self.encoder.decode(frames, configuration)
         return self.serializer.deserialize(raw_payload_serialized)
 
     def run(
         self,
-        input: bytes,
+        data: bytes,
         file_path: str,
         configuration: EncodingConfiguration,
         mock: bool = False,
@@ -233,9 +244,9 @@ class VideoEncodingPipeline[TFrame]:
 
         verbose = configuration.verbose
         if verbose:
-            self._print_start(configuration, len(input))
+            self._print_start(configuration, len(data))
 
-        frames = self.encode(input, configuration, file_path if not mock else None)
+        frames = self.encode(data, configuration, file_path if not mock else None)
 
         if not mock:
             frames = self.video_handler.read(file_path, configuration)
@@ -245,7 +256,7 @@ class VideoEncodingPipeline[TFrame]:
         except ValueError as exception:
             return Result(None, exception=exception)
 
-        is_valid = self.validation_function(input, output)
+        is_valid = self.validation_function(data, output)
 
         if verbose:
             self._print_stop(is_valid, output_length=len(output))

@@ -4,10 +4,11 @@ A module containing utility functions that are used by other modules in the pack
 
 import os
 import random
+from itertools import tee
 from pathlib import Path
 from string import ascii_uppercase
 from tkinter import filedialog
-from typing import Optional, Tuple
+from typing import Iterator, Optional, Tuple
 
 import psutil
 from src.constants import PROJECT_DIRECTORY
@@ -134,6 +135,18 @@ def get_core_specifications() -> Tuple[int, int]:
     logical_cores = os.cpu_count()
 
     return physical_cores, logical_cores
+
+
+def try_get_iter_count(iterator: Iterator) -> Tuple[bool, int, Iterator]:
+    try:
+        copy, original = tee(iterator)
+        count = sum(1 for _ in copy)
+        return True, count, original
+    except Exception:
+        return (
+            False,
+            0,
+        )
 
 
 # endregion

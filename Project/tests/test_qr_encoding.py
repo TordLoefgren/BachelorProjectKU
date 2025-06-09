@@ -4,7 +4,7 @@ from parameterized import parameterized
 from src.enums import QRErrorCorrectionLevel
 from src.qr_configuration import QREncodingConfiguration
 from src.qr_encoding import generate_qr_frames
-from src.utils import generate_random_bytes
+from src.utils import generate_random_bytes, try_get_iter_count
 
 
 class TestQREncoding(TestCase):
@@ -37,6 +37,8 @@ class TestQREncoding(TestCase):
 
         # Act
         frames = generate_qr_frames(input_data_bytes, configuration)
+        success, count, _ = try_get_iter_count(frames)
 
         # Assert
-        self.assertEqual(len(frames), expected_frames_length)
+        self.assertTrue(success)
+        self.assertEqual(count, expected_frames_length)

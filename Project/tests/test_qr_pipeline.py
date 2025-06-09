@@ -12,15 +12,6 @@ MOCK_FILE_NAME = "temp.mp4"
 
 
 class TestQRPipeline(TestCase):
-
-    @classmethod
-    def setUpClass(cls):
-        pass
-
-    @classmethod
-    def tearDownClass(cls):
-        pass
-
     def setUp(self) -> None:
         self.pipeline_default = create_qr_video_encoding_pipeline()
         self.configuration_default = QREncodingConfiguration()
@@ -33,7 +24,7 @@ class TestQRPipeline(TestCase):
         frames = self.pipeline_default.encode(input_data, self.configuration_default)
 
         # Assert
-        self.assertIsInstance(frames[0], MatLike)
+        self.assertIsInstance(next(frames), MatLike)
 
     def test__decode__should__return_data_from_frames(self) -> None:
         # Arrange

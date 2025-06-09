@@ -1,15 +1,14 @@
 from src.qr_configuration import QREncodingConfiguration
 from src.qr_video_encoder import QRVideoEncoder
-from src.utils import open_file_dialog, read_file_as_binary, write_file_as_binary
+from src.utils import read_file_as_binary, write_file_as_binary
 
 if __name__ == "__main__":
 
     # Read file as binary.
-    file_name = open_file_dialog()
-    input_data = read_file_as_binary(file_name)
+    input_data = read_file_as_binary("input.txt")
 
     # Create configuration and encoder.
-    config = QREncodingConfiguration(verbose=True)
+    config = QREncodingConfiguration()
     encoder = QRVideoEncoder(config)
 
     # Encode and decode in a single step.

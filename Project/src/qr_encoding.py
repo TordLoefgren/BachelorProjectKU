@@ -4,7 +4,7 @@ A module that contains functions for encoding QR codes.
 
 import io
 from functools import partial
-from typing import List, Optional
+from typing import Iterator, Optional
 
 import qrcode
 import segno
@@ -12,7 +12,7 @@ from PIL import Image
 from qrcode.util import MODE_8BIT_BYTE, QRData
 from src.constants import RGB, TQDM_BAR_COLOUR_GREEN, TQDM_BAR_FORMAT, MatLike
 from src.enums import QREncodingLibrary, QRErrorCorrectionLevel
-from src.performance import execute_parallel_tasks
+from src.performance import execute_parallel_iter_tasks
 from src.qr_configuration import QREncodingConfiguration
 from src.utils import bytes_to_display
 from src.video_processing import _pil_to_cv2
@@ -22,41 +22,29 @@ ENCODING_QR_FRAMES_STRING = "Encoding QR code frames"
 
 
 def encode_data_to_frames(
-    data: bytes, configuration: Optional[QREncodingConfiguration]
-) -> List[MatLike]:
+    data: bytes,
+    configuration: Optional[QREncodingConfiguration],
+    is_header: bool = False,
+) -> Iterator[MatLike]:
     """
     Generates a sequence of QR code images from the given data and creates frames from these images.
     """
 
-    return generate_qr_frames(data, configuration)
+    return generate_qr_frames(data, configuration, is_header)
 
 
-def qr_version_for_size(
-    data_len: int, qr_encoding_library, error_correction: QRErrorCorrectionLevel
-) -> int:
+def qr_version_for_size(data_len: int, error_correction: QRErrorCorrectionLevel) -> int:
     """
     Returns the smallest possible QR version that can hold payload.
     """
 
     data = b"\0" * data_len
 
-    if qr_encoding_library == QREncodingLibrary.QRCODE:
-        qr = qrcode.QRCode(
-            version=None,
-            error_correction=QRErrorCorrectionLevel.to_qrcode(error_correction),
-        )
-
-        qr.add_data(data)
-        qr.make(fit=True)
-
-    elif qr_encoding_library == QREncodingLibrary.SEGNO:
-        qr = segno.make_qr(
-            content=data,
-            mode="byte",
-            error=QRErrorCorrectionLevel.to_segno(error_correction),
-        )
-    else:
-        raise ValueError(f"Unexpected encoding library: {qr_encoding_library}")
+    qr = segno.make_qr(
+        content=data,
+        mode="byte",
+        error=QRErrorCorrectionLevel.to_segno(error_correction),
+    )
 
     return qr.version
 
@@ -64,40 +52,40 @@ def qr_version_for_size(
 def generate_qr_frames(
     data: bytes,
     configuration: Optional[QREncodingConfiguration],
-) -> List[MatLike]:
+    is_header: bool = False,
+) -> Iterator[MatLike]:
     """
     Generates a list of QR code images based on chunks of the given data.
     """
 
     max_bytes = QRErrorCorrectionLevel.to_max_bytes(configuration.error_correction)
+
+    if is_header:
+        yield _generate_qr_image(data, configuration)
+        return
+
     if configuration.chunk_size is not None:
         max_bytes = min(configuration.chunk_size, max_bytes)
 
+    chunks = (data[i : i + max_bytes] for i in range(0, len(data), max_bytes))
+
     if configuration.enable_multiprocessing:
-        return execute_parallel_tasks(
-            (
-                partial(_generate_qr_image, data[i : i + max_bytes], configuration)
-                for i in range(0, len(data), max_bytes)
-            ),
+        yield from execute_parallel_iter_tasks(
+            (partial(_generate_qr_image, chunk, configuration) for chunk in chunks),
             length=len(range(0, len(data), max_bytes)),
             max_workers=configuration.max_workers,
             verbose=configuration.verbose,
             description=ENCODING_QR_FRAMES_STRING,
         )
     else:
-        images: List[MatLike] = []
-
-        for i in tqdm(
-            range(0, len(data), max_bytes),
+        for chunk in tqdm(
+            chunks,
             desc=ENCODING_QR_FRAMES_STRING,
             disable=not configuration.verbose,
             bar_format=TQDM_BAR_FORMAT,
             colour=TQDM_BAR_COLOUR_GREEN,
         ):
-            image = _generate_qr_image(data[i : i + max_bytes], configuration)
-            images.append(image)
-
-        return images
+            yield _generate_qr_image(chunk, configuration)
 
 
 def _generate_qr_image(data: bytes, configuration: QREncodingConfiguration) -> MatLike:

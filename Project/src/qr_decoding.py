@@ -3,13 +3,14 @@ A module that contains functions for decoding QR codes.
 """
 
 from functools import partial
-from typing import List, Optional
+from itertools import tee
+from typing import Iterator, Optional
 
 from cv2 import QRCodeDetector
 from pyzbar.pyzbar import ZBarSymbol, decode
 from src.constants import TQDM_BAR_COLOUR_GREEN, TQDM_BAR_FORMAT, MatLike
 from src.enums import QRDecodingLibrary
-from src.performance import execute_parallel_tasks
+from src.performance import execute_parallel_iter_tasks
 from src.qr_configuration import QREncodingConfiguration
 from tqdm import tqdm
 
@@ -17,7 +18,7 @@ DECODING_STRING = "Decoding QR code frames"
 
 
 def decode_frames_to_data(
-    frames: List[MatLike], configuration: Optional[QREncodingConfiguration]
+    frames: Iterator[MatLike], configuration: Optional[QREncodingConfiguration]
 ) -> bytes:
     """
     Reads and decodes a QR code sequence video.
@@ -26,35 +27,33 @@ def decode_frames_to_data(
     https://stackoverflow.com/questions/18954889/how-to-process-images-of-a-video-frame-by-frame-in-video-streaming-using-openc
     """
 
-    if len(frames) == 0:
+    frames, peek = tee(frames)
+    try:
+        _ = next(peek)
+    except StopIteration:
         raise ValueError("No frames were supplied to the decoding function.")
 
     decoded_frames = bytearray()
 
-    if configuration is not None and configuration.enable_multiprocessing:
-        results = execute_parallel_tasks(
-            tasks=(partial(_decode_qr_image, frame, configuration) for frame in frames),
-            length=len(frames),
-            max_workers=configuration.max_workers,
+    if configuration and configuration.enable_multiprocessing:
+        tasks = (partial(_decode_qr_image, frame, configuration) for frame in frames)
+        for result in execute_parallel_iter_tasks(
+            tasks=tasks,
+            length=None,  # unknown length — tqdm will still show live count
             verbose=configuration.verbose,
             description=DECODING_STRING,
-        )
-        for result in results:
+            max_workers=configuration.max_workers,
+        ):
             decoded_frames.extend(result)
     else:
-        for i in tqdm(
-            range(0, len(frames)),
+        for frame in tqdm(
+            frames,
             desc=DECODING_STRING,
-            disable=not configuration.verbose if configuration is not None else True,
+            disable=not configuration.verbose if configuration else True,
             bar_format=TQDM_BAR_FORMAT,
             colour=TQDM_BAR_COLOUR_GREEN,
         ):
-            decoded_frames.extend(
-                _decode_qr_image(
-                    frames[i],
-                    (configuration if configuration is not None else None),
-                )
-            )
+            decoded_frames.extend(_decode_qr_image(frame, configuration))
 
     return bytes(decoded_frames)
 

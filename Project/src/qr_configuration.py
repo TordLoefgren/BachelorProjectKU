@@ -20,3 +20,7 @@ class QREncodingConfiguration(EncodingConfiguration):
     qr_codes_per_frame: int = 1
     qr_encoding_library: QREncodingLibrary = QREncodingLibrary.SEGNO
     qr_decoding_library: QRDecodingLibrary = QRDecodingLibrary.PYZBAR
+
+    def __post_init__(self):
+        if self.qr_codes_per_frame != 1:
+            raise NotImplementedError()

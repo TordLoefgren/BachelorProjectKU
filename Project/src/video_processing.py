@@ -5,7 +5,8 @@ A module that contains functions for video processing.
 import time
 from dataclasses import dataclass
 from functools import partial
-from typing import List, Optional, Tuple, Union
+from itertools import tee
+from typing import Iterator, List, Optional, Tuple, Union
 
 import cv2
 import dxcam
@@ -21,14 +22,14 @@ from src.constants import (
     TQDM_BAR_FORMAT,
     MatLike,
 )
-from src.performance import execute_parallel_tasks
+from src.performance import execute_parallel_iter_tasks
 from tqdm import tqdm
 
 # region ----- Video read / write -----
 
 
 def create_video_from_frames(
-    frames: List[MatLike], file_path: str, configuration: EncodingConfiguration
+    frames: Iterator[MatLike], file_path: str, configuration: EncodingConfiguration
 ) -> None:
     """
     Create a video from a list of image frames.
@@ -37,11 +38,14 @@ def create_video_from_frames(
     https://www.tutorialspoint.com/opencv_python/opencv_python_video_images.htm
     """
 
-    if not frames:
+    # Extract reference frame to determine the video image dimensions.
+    frames, peek = tee(frames)
+
+    try:
+        reference_frame = next(peek)
+    except StopIteration:
         return
 
-    # Extract reference frame to determine the video image dimensions.
-    reference_frame = frames[1]
     height, width = reference_frame.shape[:2]
 
     fourcc = cv2.VideoWriter_fourcc(*MP4V)
@@ -55,29 +59,27 @@ def create_video_from_frames(
 
     # Make sure that the frame is shaped correctly for the writer.
     if configuration.enable_multiprocessing:
-        resized_frames = execute_parallel_tasks(
-            (
-                partial(resize_frame, frames[i], (width, height))
-                for i in range(0, len(frames))
-            ),
-            length=len(frames),
+        resized_frames = execute_parallel_iter_tasks(
+            (partial(resize_frame, frame, (width, height)) for frame in frames),
+            length=None,
             max_workers=configuration.max_workers,
             verbose=configuration.verbose,
             description="Resizing frames",
         )
-
-        for frame in resized_frames:
-            video_writer.write(frame)
     else:
-        for i in tqdm(
-            range(0, len(frames)),
-            desc="Resizing frames",
-            disable=not configuration.verbose,
-            bar_format=TQDM_BAR_FORMAT,
-            colour=TQDM_BAR_COLOUR_GREEN,
-        ):
-            frame = resize_frame(frames[i], (width, height))
-            video_writer.write(frame)
+        resized_frames = (
+            resize_frame(frame, (width, height))
+            for frame in tqdm(
+                frames,
+                desc="Resizing frames",
+                disable=not configuration.verbose,
+                bar_format=TQDM_BAR_FORMAT,
+                colour=TQDM_BAR_COLOUR_GREEN,
+            )
+        )
+
+    for frame in resized_frames:
+        video_writer.write(frame)
 
     video_writer.release()
 
@@ -85,7 +87,7 @@ def create_video_from_frames(
 def create_frames_from_video(
     file_path: str,
     configuration: Optional[EncodingConfiguration] = None,
-) -> List[MatLike]:
+) -> Iterator[MatLike]:
     """
     Captures a video and returns all the frames.
 
@@ -117,7 +119,7 @@ def create_frames_from_video(
     if configuration is not None and configuration.show_decoding_window:
         cv2.destroyAllWindows()
 
-    return frames
+    return iter(frames)
 
 
 def create_frames_from_capture(
