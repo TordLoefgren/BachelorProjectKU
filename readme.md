@@ -36,6 +36,7 @@ result = encoder.roundtrip(input_data, file_path="demo_video.mp4")
 
 if result.is_valid:
     # Create a 1:1 copy of the input text.
+    print("Success")
     write_file_as_binary(result.value, "output.txt")
 else:
     print("Decoding failed:", result.exception)
@@ -47,6 +48,10 @@ else:
 </details>
 
 
+#### Requirements
+
+To install the requirements, run ```pip install -r requirements.txt```.
+
 
 #### Tests
-To run the unit test suite, navigate to the ```Project``` directory, and write ```"python -m unittest discover tests"``` in the console.
+To run the unit test suite, navigate to the ```Project``` directory, and write ```python -m unittest discover tests``` in the console.
