@@ -3,7 +3,6 @@ A module that contains functions for decoding QR codes.
 """
 
 from functools import partial
-from itertools import tee
 from typing import Iterator, Optional
 
 from cv2 import QRCodeDetector
@@ -12,9 +11,10 @@ from src.constants import TQDM_BAR_COLOUR_GREEN, TQDM_BAR_FORMAT, MatLike
 from src.enums import QRDecodingLibrary
 from src.performance import execute_parallel_iter_tasks
 from src.qr_configuration import QREncodingConfiguration
+from src.utils import try_get_iter_count
 from tqdm import tqdm
 
-DECODING_STRING = "Decoding QR code frames"
+DECODING_STRING = "Decoding QR code video"
 
 
 def decode_frames_to_data(
@@ -27,10 +27,8 @@ def decode_frames_to_data(
     https://stackoverflow.com/questions/18954889/how-to-process-images-of-a-video-frame-by-frame-in-video-streaming-using-openc
     """
 
-    frames, peek = tee(frames)
-    try:
-        _ = next(peek)
-    except StopIteration:
+    valid, length, frames = try_get_iter_count(frames)
+    if not valid or length == 0:
         raise ValueError("No frames were supplied to the decoding function.")
 
     decoded_frames = bytearray()
@@ -39,7 +37,7 @@ def decode_frames_to_data(
         tasks = (partial(_decode_qr_image, frame, configuration) for frame in frames)
         for result in execute_parallel_iter_tasks(
             tasks=tasks,
-            length=None,  # unknown length — tqdm will still show live count
+            length=length,
             verbose=configuration.verbose,
             description=DECODING_STRING,
             max_workers=configuration.max_workers,

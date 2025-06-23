@@ -6,6 +6,7 @@ import base64
 import pickle
 from dataclasses import dataclass
 from itertools import chain
+from time import perf_counter
 from typing import Callable, Iterator, Optional
 
 from src.constants import BYTE_ORDER_BIG, CONFIGURATION_HEADER_LENGTH_BYTES
@@ -53,10 +54,6 @@ class EncodingConfiguration:
     @staticmethod
     def from_bytes(data: bytes) -> "EncodingConfiguration":
         return pickle.loads(data)
-
-    def __post_init__(self):
-        if self.verbose is not False:
-            raise NotImplementedError()
 
 
 @dataclass
@@ -244,6 +241,7 @@ class VideoEncodingPipeline[TFrame]:
 
         verbose = configuration.verbose
         if verbose:
+            start = perf_counter()
             self._print_start(configuration, len(data))
 
         frames = self.encode(data, configuration, file_path if not mock else None)
@@ -259,7 +257,8 @@ class VideoEncodingPipeline[TFrame]:
         is_valid = self.validation_function(data, output)
 
         if verbose:
-            self._print_stop(is_valid, output_length=len(output))
+            duration = perf_counter() - start
+            self._print_stop(is_valid, output_length=len(output), duration=duration)
 
         if not is_valid:
             return Result(
@@ -283,15 +282,15 @@ class VideoEncodingPipeline[TFrame]:
 
         if configuration.enable_multiprocessing:
             physical_cores, logical_cores = get_core_specifications()
-            max_processes = (
-                configuration.max_workers
+            max_workers = (
+                str(configuration.max_workers)
                 if configuration.max_workers is not None
-                else logical_cores
+                else "Automatic"
             )
 
             print(f"│ Physical cores:      {physical_cores}")
             print(f"│ Logical cores:       {logical_cores}")
-            print(f"│ Max processes:       {max_processes}")
+            print(f"│ Max workers:         {max_workers}")
 
         print("│")
         print(f"│ Input size:          {bytes_to_display(input_length)}")
@@ -299,7 +298,7 @@ class VideoEncodingPipeline[TFrame]:
         print("└──── Running pipeline ────┐")
         print("                           │\n")
 
-    def _print_stop(self, is_valid: bool, output_length: int) -> None:
+    def _print_stop(self, is_valid: bool, output_length: int, duration: float) -> None:
         """
         Prints the pipeline stop information.
         """
@@ -308,6 +307,7 @@ class VideoEncodingPipeline[TFrame]:
         print("┌──── Finished pipeline ───┘")
         print("│")
         print(f"│ Output size:          {bytes_to_display(output_length)}")
+        print(f"│ Duration:             {duration:.2f} seconds")
         print("│")
         print(f"│ Validation:           {"Success" if is_valid else "Failure"}\n")
 

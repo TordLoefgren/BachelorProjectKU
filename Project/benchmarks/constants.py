@@ -27,12 +27,20 @@ DESERIALIZE_THROUGHPUT_MB_S_HEADER = "Deserialize Throughput (MB/s)"
 WRITE_VIDEO_THROUGHPUT_MB_S_HEADER = "Write Video Throughput (MB/s)"
 READ_VIDEO_THROUGHPUT_MB_S_HEADER = "Read Video Throughput (MB/s)"
 TOTAL_THROUGHPUT_MB_S_HEADER = "Total Throughput (MB/s)"
+ROUNDTRIP_SUCCESS_HEADER = "Roundtrip Success"
 
 BENCHMARKS_ALL_EAGER_PATH = "data/benchmark_all_eager.csv"
+BENCHMARKS_ALL_EAGER_WITH_RESULT_PATH = "data/benchmark_all_eager_with_result.csv"
 BENCHMARKS_STRONG_SCALING_EAGER_PATH = "data/benchmark_strong_scaling_eager.csv"
 BENCHMARKS_STRONG_SCALING_LAZY_PATH = "data/benchmark_strong_scaling_lazy.csv"
+BENCHMARKS_STRONG_SCALING_LAZY_WITH_RESULT_PATH = (
+    "data/benchmark_strong_scaling_lazy_with_result.csv"
+)
 BENCHMARKS_WEAK_SCALING_EAGER_PATH = "data/benchmark_weak_scaling_eager.csv"
 BENCHMARKS_WEAK_SCALING_LAZY_PATH = "data/benchmark_weak_scaling_lazy.csv"
+BENCHMARKS_WEAK_SCALING_LAZY_WITH_RESULT_PATH = (
+    "data/benchmark_weak_scaling_lazy_with_result.csv"
+)
 MP4_FILE = "temp.mp4"
 MB = 1_000_000
 KB = 1_000

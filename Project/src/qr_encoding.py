@@ -18,7 +18,7 @@ from src.utils import bytes_to_display
 from src.video_processing import _pil_to_cv2
 from tqdm import tqdm
 
-ENCODING_QR_FRAMES_STRING = "Encoding QR code frames"
+ENCODING_QR_FRAMES_STRING = "Encoding QR code video"
 
 
 def encode_data_to_frames(

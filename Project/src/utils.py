@@ -143,10 +143,7 @@ def try_get_iter_count(iterator: Iterator) -> Tuple[bool, int, Iterator]:
         count = sum(1 for _ in copy)
         return True, count, original
     except Exception:
-        return (
-            False,
-            0,
-        )
+        return (False, 0, None)
 
 
 # endregion

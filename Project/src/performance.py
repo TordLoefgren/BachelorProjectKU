@@ -61,16 +61,19 @@ def execute_parallel_iter_tasks[T](
         results = executor.map(_execute_task, tasks)
 
         if verbose:
-            results = tqdm(
+            with tqdm(
                 executor.map(_execute_task, tasks),
                 total=length,
                 desc=description,
-                disable=not verbose,
+                disable=False,
                 bar_format=TQDM_BAR_FORMAT,
                 colour=TQDM_BAR_COLOUR_GREEN,
-            )
-
-    yield from results
+            ) as progress_bar:
+                for result in results:
+                    progress_bar.update(1)
+                    yield result
+        else:
+            yield from results
 
 
 def _execute_task[T](task: Callable[..., T]) -> T:

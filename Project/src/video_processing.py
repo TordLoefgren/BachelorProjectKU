@@ -63,7 +63,7 @@ def create_video_from_frames(
             (partial(resize_frame, frame, (width, height)) for frame in frames),
             length=None,
             max_workers=configuration.max_workers,
-            verbose=configuration.verbose,
+            verbose=False,
             description="Resizing frames",
         )
     else:
@@ -95,7 +95,6 @@ def create_frames_from_video(
     https://stackoverflow.com/questions/18954889/how-to-process-images-of-a-video-frame-by-frame-in-video-streaming-using-openc
     """
 
-    frames = []
     capture = cv2.VideoCapture(file_path)
 
     while capture.isOpened():
@@ -112,14 +111,12 @@ def create_frames_from_video(
             ):
                 break
 
-        frames.append(frame)
+        yield frame
 
     capture.release()
 
     if configuration is not None and configuration.show_decoding_window:
         cv2.destroyAllWindows()
-
-    return iter(frames)
 
 
 def create_frames_from_capture(

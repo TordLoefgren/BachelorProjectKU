@@ -22,6 +22,7 @@ from constants import (
     MP4_FILE,
     QR_VERSION_HEADER,
     READ_VIDEO_THROUGHPUT_MB_S_HEADER,
+    ROUNDTRIP_SUCCESS_HEADER,
     SERIALIZE_THROUGHPUT_MB_S_HEADER,
     TIME_DECODE_HEADER,
     TIME_DESERIALIZE_HEADER,
@@ -130,6 +131,7 @@ def create_encoder_roundtrip_benchmarks(
                                     time_total_ms,
                                     frames_count,
                                     video_size_bytes,
+                                    roundtrip_success,
                                     snapshots,
                                 ) = _benchmark_full_pipeline(
                                     data=data, configuration=configuration
@@ -141,6 +143,7 @@ def create_encoder_roundtrip_benchmarks(
                                     time_total_ms,
                                     frames_count,
                                     video_size_bytes,
+                                    roundtrip_success,
                                     snapshots,
                                 ) = _benchmark_encoder_roundtrip(
                                     data=data, configuration=configuration
@@ -161,6 +164,7 @@ def create_encoder_roundtrip_benchmarks(
                                 time_encode_ms=time_encode_ms,
                                 time_decode_ms=time_decode_ms,
                                 time_total_ms=time_total_ms,
+                                roundtrip_success=roundtrip_success,
                                 time_serialize_ms=(
                                     time_serialize_ms if eager else None
                                 ),
@@ -202,7 +206,9 @@ def create_encoder_roundtrip_benchmarks(
 
 def _benchmark_full_pipeline(
     data: bytes, configuration: QREncodingConfiguration
-) -> Tuple[float, float, float, float, float, float, float, int, int, Dict[str, Any]]:
+) -> Tuple[
+    float, float, float, float, float, float, float, int, int, bool, Dict[str, Any]
+]:
 
     pipeline = create_qr_video_encoding_pipeline()
     snapshots = {}
@@ -255,7 +261,7 @@ def _benchmark_full_pipeline(
     snapshots.update(_capture_step_snapshot("Decode"))
 
     # 6. Deserialize.
-    _, time_deserialize_ms = measure_task_performance(
+    result, time_deserialize_ms = measure_task_performance(
         partial(pipeline.serializer.deserialize, raw_data_serialized)
     )
     snapshots.update(_capture_step_snapshot("Deserialize"))
@@ -280,13 +286,14 @@ def _benchmark_full_pipeline(
         time_total_ms,
         frames_count,
         video_size_bytes,
+        data == result,
         snapshots,
     )
 
 
 def _benchmark_encoder_roundtrip(
     data: bytes, configuration: QREncodingConfiguration
-) -> Tuple[float, float, float, int, int, Dict[str, Any]]:
+) -> Tuple[float, float, float, int, int, bool, Dict[str, Any]]:
 
     qr_video_encoder = QRVideoEncoder(configuration)
 
@@ -298,7 +305,7 @@ def _benchmark_encoder_roundtrip(
     )
 
     # Decoding.
-    _, time_decode_ms = measure_task_performance(
+    result, time_decode_ms = measure_task_performance(
         partial(qr_video_encoder.decode, MP4_FILE)
     )
     snapshots.update(_capture_step_snapshot("Encode"))
@@ -317,6 +324,7 @@ def _benchmark_encoder_roundtrip(
         time_total_ms,
         frames_count,
         video_size_bytes,
+        data == result,
         snapshots,
     )
 
@@ -333,6 +341,7 @@ def _create_entry(
     time_encode_ms: float,
     time_decode_ms: float,
     time_total_ms: float,
+    roundtrip_success: bool,
     time_serialize_ms: Optional[float] = None,
     time_deserialize_ms: Optional[float] = None,
     time_write_video_ms: Optional[float] = None,
@@ -359,6 +368,7 @@ def _create_entry(
         TIME_WRITE_VIDEO_HEADER: time_write_video_ms,
         TIME_READ_VIDEO_HEADER: time_read_video_ms,
         TIME_TOTAL_HEADER: time_total_ms,
+        ROUNDTRIP_SUCCESS_HEADER: roundtrip_success,
         SERIALIZE_THROUGHPUT_MB_S_HEADER: (
             data_size_mb / time_serialize_ms * MILLISECONDS_PER_SECOND
             if time_serialize_ms is not None and time_serialize_ms > 0
