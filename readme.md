@@ -1,19 +1,126 @@
-### Data Storage through Visual Encoding
+# Data Storage Through Visual Encoding
 
-**Data Storage through Visual Encoding** is an experimental sandbox project developed as part of my third-year Computer Science bachelor thesis at the University of Copenhagen. 
+**Data Storage Through Visual Encoding** is an experimental sandbox project developed as part of my third-year Computer Science bachelor thesis at the University of Copenhagen.
 
-It explores storing binary data by converting it into a sequence of QR codes that are embedded in video frames and then decoding that video back to the original data. While fully functional, this project was built as a proof-of-concept for research and learning, not as a production-ready utility library. 
+It explores how a **reliable and reversible pipeline** can be constructed for storing arbitrary binary data by converting it into a sequence of QR codes embedded in video frames and then decoding that video back to the original data.
 
-Key features include:
-- **Modular pipeline design**: The encoding/decoding workflow is composed of interchangeable modules (for data serialization, QR code generation, video handling, etc.), making it easy to adjust or extend each stage.
-- **Reversible process**: The pipeline is symmetric – data encoded into a QR code video can be decoded back losslessly to the original input, ensuring a 1:1 round-trip.
-- **Performance benchmarking**: Includes tools to measure encoding/decoding speed and evaluate how different configurations affect data throughput and reliability.
+This project is intended as a learning and research prototype rather than a production-ready storage system.
 
 
 
-### Demo: 
+## Project Status
 
-The example below reads a text file as bytes, encodes it into a QR code video, and then decodes the video to produce an output file. This round-trip verifies that the decoded result matches the original input data:
+This project is a research prototype and proof-of-concept.
+
+The primary goal is to explore system architecture, reversibility, and empirical analysis of a QR–video encoding pipeline.
+
+The project prioritizes:
+
+- Designing a clean, symmetric, and modular pipeline  
+- Making bottlenecks observable  
+- Measuring scaling behavior and resource usage  
+
+Performance optimization of individual stages is considered outside the main scope of the project and is deliberately deferred in favor of benchmarking and empirical analysis.
+
+
+
+## What This Project Demonstrates
+
+- Designing a symmetric, reversible data pipeline  
+- Modular architecture with clearly separated layers  
+- Handling arbitrary binary data end-to-end  
+- Multiprocessing for CPU-bound workloads  
+- Lazy evaluation and chunked processing of data  
+- Benchmark-driven identification of bottlenecks  
+- Strong and weak scaling experiments  
+- Making informed architectural trade-offs  
+
+
+
+## Results Summary
+
+- End-to-end encoding and decoding is fully reversible  
+- The pipeline reliably round-trips arbitrary binary data  
+- Dominant bottleneck: QR generation and image processing  
+- Multiprocessing improves throughput but does not remove the primary bottleneck  
+- Experiments show that QR image generation dominates runtime even when parallelized
+- Practical behavior on typical desktop hardware:
+  - Reliable up to ~1 MB inputs  
+  - Larger inputs work but become increasingly slow  
+  - End-to-end throughput roughly ~0.01–0.06 MB/s depending on configuration  
+
+
+
+## Design Rationale
+
+The system is intentionally designed around a symmetric, modular pipeline:
+
+```
+serialize -> encode -> write video -> read video -> decode -> deserialize
+```
+
+Each stage has an inverse operation, enabling direct round-trip validation. 
+
+Pipeline stages are evaluated lazily where possible, allowing data to be processed incrementally in chunks.
+
+Multiprocessing is used to improve throughput, but the project does not does not optimize the QR generation or image processing algorithms directly.
+
+Rather than focusing on optimizations of individual stages directly, the project focuses on:
+
+- Making bottlenecks visible  
+- Measuring scaling behavior  
+- Exploring trade-offs between payload size, error correction, and chunking  
+
+
+
+## Repository Overview
+
+The repository is organized around three main areas:
+
+```
+src/            # Core pipeline implementation
+tests/          # Unit tests and round-trip validation tests
+benchmarks/     # Benchmark scripts and recorded benchmark data
+```
+
+
+### src/
+
+Contains the implementation of the QR-video encoding pipeline:
+
+- Serialization and deserialization  
+- QR encoding and decoding  
+- Video writing and reading  
+- Configuration system  
+
+This is where the architectural ideas of a symmetric, modular pipeline are implemented.
+
+### tests/
+
+Unit tests and integration-style tests that validate:
+
+- Individual pipeline layers  
+- End-to-end round-trip correctness  
+
+Tests focus primarily on correctness rather than performance.
+
+### benchmarks/
+
+Scripts and datasets used to measure:
+
+- Throughput  
+- CPU usage  
+- Memory usage  
+- Scaling behavior  
+
+Benchmarks are intended to expose bottlenecks and performance trends, not to present an optimized solution.
+
+
+
+## Demo
+
+The example below reads a text file as bytes, encodes it into a QR code video, and then decodes the video to produce an output file.  
+This round-trip verifies that the decoded result matches the original input data:
 
 ```python
 from src.qr_configuration import QREncodingConfiguration
@@ -24,7 +131,9 @@ from src.utils import read_file_as_binary, write_file_as_binary
 input_data = read_file_as_binary("input.txt")
 
 # Create configuration and encoder.
-config = QREncodingConfiguration()
+config = QREncodingConfiguration(
+    verbose=True  # Print pipeline stages and progress
+)
 encoder = QRVideoEncoder(config)
 
 # Encode and decode in a single step.
