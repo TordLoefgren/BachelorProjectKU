@@ -1,164 +1,135 @@
 # Data Storage Through Visual Encoding
 
-**Data Storage Through Visual Encoding** is an experimental sandbox project developed as part of my third-year Computer Science bachelor thesis at the University of Copenhagen.
+*A reversible QR-video encoding pipeline for binary data.*
 
-It explores how a **reliable and reversible pipeline** can be constructed for storing arbitrary binary data by converting it into a sequence of QR codes embedded in video frames and then decoding that video back to the original data.
+This repository contains the software prototype developed for **Data Storage Through Visual Encoding**, my third-year BSc project in Computer Science at the University of Copenhagen.
 
-This project is intended as a learning and research prototype rather than a production-ready storage system.
+The system encodes binary data as sequences of QR-code video frames and decodes the video back into the original data. It was developed to investigate pipeline architecture, reversibility, multiprocessing, memory usage, throughput, and scalability.
 
-
-
-## Project Status
-
-This project is a research prototype and proof-of-concept.
-
-The primary goal is to explore system architecture, reversibility, and empirical analysis of a QR–video encoding pipeline.
-
-The project prioritizes:
-
-- Designing a clean, symmetric, and modular pipeline  
-- Making bottlenecks observable  
-- Measuring scaling behavior and resource usage  
-
-Performance optimization of individual stages is considered outside the main scope of the project and is deliberately deferred in favor of benchmarking and empirical analysis.
+The repository contains the implementation and benchmark artifacts. The accompanying bachelor report is not included.
 
 
+## Motivation
 
-## What This Project Demonstrates
-
-- Designing a symmetric, reversible data pipeline  
-- Modular architecture with clearly separated layers  
-- Handling arbitrary binary data end-to-end  
-- Multiprocessing for CPU-bound workloads  
-- Lazy evaluation and chunked processing of data  
-- Benchmark-driven identification of bottlenecks  
-- Strong and weak scaling experiments  
-- Making informed architectural trade-offs  
+The project originated from the question of whether QR codes could be used as an unconventional storage medium in video. Their built-in error correction made them particularly interesting, as it could potentially help encoded data survive lossy video compression and transcoding.
 
 
+## Architecture
 
-## Results Summary
+The system uses a symmetric, modular pipeline:
 
-- End-to-end encoding and decoding is fully reversible  
-- The pipeline reliably round-trips arbitrary binary data  
-- Dominant bottleneck: QR generation and image processing  
-- Multiprocessing improves throughput but does not remove the primary bottleneck  
-- Experiments show that QR image generation dominates runtime even when parallelized
-- Practical behavior on typical desktop hardware:
-  - Reliable up to ~1 MB inputs  
-  - Larger inputs work but become increasingly slow  
-  - End-to-end throughput roughly ~0.01–0.06 MB/s depending on configuration  
-
-
-
-## Design Rationale
-
-The system is intentionally designed around a symmetric, modular pipeline:
-
-```
+```text
 serialize -> encode -> write video -> read video -> decode -> deserialize
 ```
 
-Each stage has an inverse operation, enabling direct round-trip validation. 
+Each stage has a corresponding inverse operation, enabling direct end-to-end validation.
 
-Pipeline stages are evaluated lazily where possible, allowing data to be processed incrementally in chunks.
-
-Multiprocessing is used to improve throughput, but the project does not does not optimize the QR generation or image processing algorithms directly.
-
-Rather than focusing on optimizations of individual stages directly, the project focuses on:
-
-- Making bottlenecks visible  
-- Measuring scaling behavior  
-- Exploring trade-offs between payload size, error correction, and chunking  
+Binary payloads are Base64-serialized before QR encoding to avoid limitations encountered in the decoding libraries. Data is processed lazily and in chunks where possible to reduce peak memory usage, while CPU-bound QR generation and decoding are parallelized using multiprocessing.
 
 
+## What the Project Demonstrates
 
-## Repository Overview
+- Symmetric and reversible pipeline design
+- Modular layers with unit and end-to-end testing
+- Reliable round trips of binary payloads within tested configurations
+- Multiprocessing for CPU-bound workloads
+- Lazy and chunked data processing
+- Benchmarking of throughput, CPU usage, memory usage, and scalability
+- Analysis of payload size, QR version, error correction, and chunking trade-offs
 
-The repository is organized around three main areas:
 
+## Results and Limitations
+
+- QR generation and image processing were the primary performance bottlenecks
+- Multiprocessing improved throughput and CPU utilization but did not remove the bottleneck
+- Strong scaling was useful for approximately the first ten workers before diminishing returns
+- Weak scaling deteriorated as both workload and worker count increased
+- Data-to-video throughput was approximately 0.01–0.06 MB/s, depending on configuration
+- Best-case video-to-data throughput was approximately 0.5 MB/s
+- Inputs up to approximately 1 MB were processed reliably on the tested desktop hardware; larger inputs worked but became increasingly slow
+- Benchmarking exposed significant memory issues, leading to a refactor toward lazy, on-demand processing
+- Lazy processing reduced memory usage but introduced behavioral coupling between image generation and video processing, complicating some isolated benchmarks
+- The modular architecture improved testing and extensibility but was more general than required for a prototype using only QR-code encoding
+- Real-world viability would require further investigation of serialization, alternative encodings, video compression, and platform-specific transcoding
+
+The resulting system is a reliable proof of concept and a foundation for further experimentation, not a production-ready storage solution.
+
+
+## Future Work
+
+The project uses general-purpose QR libraries for sustained, high-volume frame generation—a workload substantially different from conventional one-code-at-a-time use.
+
+A useful next step would be to profile QR matrix construction, image rasterization, memory transfer, and video encoding separately. Depending on the results, QR generation could then be moved to a batched native implementation or accelerated on the GPU.
+
+Other areas for investigation include alternative serialization, visual encoding methods, video compression, and platform-specific transcoding.
+
+
+## Repository Structure
+
+```text
+Project/
+├── src/            # Pipeline implementation
+├── tests/          # Unit and round-trip tests
+├── benchmarks/     # Benchmark scripts and recorded data
+└── main.py         # Example entry point
+
+demo.gif            # Example QR-video output
+requirements.txt    # Python dependencies
+readme.md           # Project documentation
 ```
-src/            # Core pipeline implementation
-tests/          # Unit tests and round-trip validation tests
-benchmarks/     # Benchmark scripts and recorded benchmark data
-```
-
-
-### src/
-
-Contains the implementation of the QR-video encoding pipeline:
-
-- Serialization and deserialization  
-- QR encoding and decoding  
-- Video writing and reading  
-- Configuration system  
-
-This is where the architectural ideas of a symmetric, modular pipeline are implemented.
-
-### tests/
-
-Unit tests and integration-style tests that validate:
-
-- Individual pipeline layers  
-- End-to-end round-trip correctness  
-
-Tests focus primarily on correctness rather than performance.
-
-### benchmarks/
-
-Scripts and datasets used to measure:
-
-- Throughput  
-- CPU usage  
-- Memory usage  
-- Scaling behavior  
-
-Benchmarks are intended to expose bottlenecks and performance trends, not to present an optimized solution.
-
 
 
 ## Demo
 
-The example below reads a text file as bytes, encodes it into a QR code video, and then decodes the video to produce an output file.  
-This round-trip verifies that the decoded result matches the original input data:
+The following example performs a complete data-to-video-to-data round trip:
 
 ```python
 from src.qr_configuration import QREncodingConfiguration
 from src.qr_video_encoder import QRVideoEncoder
 from src.utils import read_file_as_binary, write_file_as_binary
 
-# Read file as binary.
 input_data = read_file_as_binary("input.txt")
 
-# Create configuration and encoder.
-config = QREncodingConfiguration(
-    verbose=True  # Print pipeline stages and progress
+encoder = QRVideoEncoder(
+    QREncodingConfiguration(verbose=True)
 )
-encoder = QRVideoEncoder(config)
 
-# Encode and decode in a single step.
-result = encoder.roundtrip(input_data, file_path="demo_video.mp4")
+result = encoder.roundtrip(
+    input_data,
+    file_path="demo_video.mp4",
+)
 
 if result.is_valid:
-    # Create a 1:1 copy of the input text.
-    print("Success")
     write_file_as_binary(result.value, "output.txt")
+    print("Success")
 else:
     print("Decoding failed:", result.exception)
 ```
 
 <details>
-  <summary>Click to show sample video output (⚠️ Warning: Photosensitive Content) </summary>
-  <img src="/demo.gif" alt="Demo" />
+  <summary>Show sample output — warning: rapidly flashing QR-code frames</summary>
+
+  <img src="./demo.gif" alt="Example output from the QR-video encoding pipeline" />
 </details>
 
 
-### Getting Started
+## Getting Started
 
-Make sure you have Python 3 and the required dependencies installed. You can install all dependencies using the provided requirements file:
+Install the dependencies from the repository root:
 
-```pip install -r requirements.txt```
+```bash
+python -m pip install -r requirements.txt
+```
 
-To run the unit test suite, navigate to the Project directory and execute:
+Run the example:
 
-```python -m unittest discover tests```
+```bash
+cd Project
+python main.py
+```
+
+Run the test suite:
+
+```bash
+python -m unittest discover tests
+```
